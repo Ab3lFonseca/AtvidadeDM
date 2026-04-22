@@ -1,6 +1,10 @@
 package com.example.atvidadedm.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.atvidadedm.data.RegisterResult
+import com.example.atvidadedm.data.UserRepository
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,13 +25,18 @@ data class RegisterUiState(
     val emailError: String? = null,
     val phoneError: String? = null,
     val passwordError: String? = null,
-    val confirmPasswordError: String? = null
+    val confirmPasswordError: String? = null,
+    val isSaving: Boolean = false,
+    val feedbackMessage: String? = null,
+    val registrationSucceeded: Boolean = false
 )
 
 /**
  * ViewModel responsável pela lógica da Tela de Cadastro.
  */
-class RegisterViewModel : ViewModel() {
+class RegisterViewModel(
+    private val userRepository: UserRepository
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(RegisterUiState())
     val uiState: StateFlow<RegisterUiState> = _uiState.asStateFlow()
@@ -60,12 +69,78 @@ class RegisterViewModel : ViewModel() {
         _uiState.update { it.copy(confirmPasswordVisible = !it.confirmPasswordVisible) }
     }
 
+    fun registerUser() {
+        if (!validate()) {
+            return
+        }
+
+        val state = _uiState.value
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true) }
+
+            when (
+                userRepository.registerUser(
+                    name = state.name,
+                    email = state.email,
+                    phone = state.phone,
+                    password = state.password
+                )
+            ) {
+                RegisterResult.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            isSaving = false,
+                            feedbackMessage = "Usuario cadastrado com sucesso!",
+                            registrationSucceeded = true
+                        )
+                    }
+                }
+
+                RegisterResult.EmailAlreadyExists -> {
+                    _uiState.update {
+                        it.copy(
+                            isSaving = false,
+                            emailError = "Ja existe um usuario com este e-mail"
+                        )
+                    }
+                }
+
+                RegisterResult.Failure -> {
+                    _uiState.update {
+                        it.copy(
+                            isSaving = false,
+                            feedbackMessage = "Nao foi possivel concluir o cadastro"
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    fun onFeedbackMessageShown() {
+        _uiState.update { it.copy(feedbackMessage = null) }
+    }
+
+    fun onNavigationToLoginHandled() {
+        _uiState.update { it.copy(registrationSucceeded = false) }
+    }
+
     /**
      * Valida todos os campos e retorna `true` se o formulário estiver correto.
      */
     fun validate(): Boolean {
         val state = _uiState.value
         var isValid = true
+
+        _uiState.update {
+            it.copy(
+                nameError = null,
+                emailError = null,
+                phoneError = null,
+                passwordError = null,
+                confirmPasswordError = null
+            )
+        }
 
         if (state.name.isBlank()) {
             _uiState.update { it.copy(nameError = "Nome é obrigatório") }

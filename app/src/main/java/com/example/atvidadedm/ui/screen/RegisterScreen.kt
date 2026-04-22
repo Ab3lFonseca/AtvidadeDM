@@ -21,12 +21,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
@@ -35,8 +40,11 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.atvidadedm.data.UserRepository
+import com.example.atvidadedm.data.local.AppDatabase
 import com.example.atvidadedm.ui.theme.AtvidadeDMTheme
 import com.example.atvidadedm.ui.viewmodel.RegisterViewModel
+import com.example.atvidadedm.ui.viewmodel.RegisterViewModelFactory
 
 /**
  * Tela de Cadastro de novo usuário.
@@ -47,11 +55,40 @@ import com.example.atvidadedm.ui.viewmodel.RegisterViewModel
 @Composable
 fun RegisterScreen(
     onBack: () -> Unit,
-    viewModel: RegisterViewModel = viewModel()
+    providedViewModel: RegisterViewModel? = null
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val defaultViewModel: RegisterViewModel = viewModel(
+        factory = remember {
+            RegisterViewModelFactory(
+                UserRepository(
+                    AppDatabase.getInstance(context).userDao()
+                )
+            )
+        }
+    )
+    val activeViewModel = providedViewModel ?: defaultViewModel
+    val uiState by activeViewModel.uiState.collectAsState()
+
+    LaunchedEffect(uiState.feedbackMessage) {
+        uiState.feedbackMessage?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            activeViewModel.onFeedbackMessageShown()
+        }
+    }
+
+    LaunchedEffect(uiState.registrationSucceeded) {
+        if (uiState.registrationSucceeded) {
+            activeViewModel.onNavigationToLoginHandled()
+            onBack()
+        }
+    }
 
     Scaffold(
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState)
+        },
         topBar = {
             TopAppBar(
                 title = { Text("Criar Conta") },
@@ -91,7 +128,7 @@ fun RegisterScreen(
             // Campo: Nome
             OutlinedTextField(
                 value = uiState.name,
-                onValueChange = viewModel::onNameChange,
+                onValueChange = activeViewModel::onNameChange,
                 label = { Text("Nome") },
                 placeholder = { Text("Seu nome completo") },
                 isError = uiState.nameError != null,
@@ -108,7 +145,7 @@ fun RegisterScreen(
             // Campo: E-mail
             OutlinedTextField(
                 value = uiState.email,
-                onValueChange = viewModel::onEmailChange,
+                onValueChange = activeViewModel::onEmailChange,
                 label = { Text("E-mail") },
                 placeholder = { Text("exemplo@email.com") },
                 isError = uiState.emailError != null,
@@ -125,7 +162,7 @@ fun RegisterScreen(
             // Campo: Telefone
             OutlinedTextField(
                 value = uiState.phone,
-                onValueChange = viewModel::onPhoneChange,
+                onValueChange = activeViewModel::onPhoneChange,
                 label = { Text("Telefone") },
                 placeholder = { Text("(00) 00000-0000") },
                 isError = uiState.phoneError != null,
@@ -142,7 +179,7 @@ fun RegisterScreen(
             // Campo: Senha
             OutlinedTextField(
                 value = uiState.password,
-                onValueChange = viewModel::onPasswordChange,
+                onValueChange = activeViewModel::onPasswordChange,
                 label = { Text("Senha") },
                 visualTransformation = if (uiState.passwordVisible)
                     VisualTransformation.None else PasswordVisualTransformation(),
@@ -152,7 +189,7 @@ fun RegisterScreen(
                 },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 trailingIcon = {
-                    IconButton(onClick = viewModel::togglePasswordVisibility) {
+                    IconButton(onClick = activeViewModel::togglePasswordVisibility) {
                         Icon(
                             imageVector = if (uiState.passwordVisible)
                                 Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
@@ -170,7 +207,7 @@ fun RegisterScreen(
             // Campo: Confirmação de Senha
             OutlinedTextField(
                 value = uiState.confirmPassword,
-                onValueChange = viewModel::onConfirmPasswordChange,
+                onValueChange = activeViewModel::onConfirmPasswordChange,
                 label = { Text("Confirmar Senha") },
                 visualTransformation = if (uiState.confirmPasswordVisible)
                     VisualTransformation.None else PasswordVisualTransformation(),
@@ -180,7 +217,7 @@ fun RegisterScreen(
                 },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 trailingIcon = {
-                    IconButton(onClick = viewModel::toggleConfirmPasswordVisibility) {
+                    IconButton(onClick = activeViewModel::toggleConfirmPasswordVisibility) {
                         Icon(
                             imageVector = if (uiState.confirmPasswordVisible)
                                 Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
@@ -198,13 +235,12 @@ fun RegisterScreen(
             // Botão de Cadastro – valida e retorna para Login
             Button(
                 onClick = {
-                    if (viewModel.validate()) {
-                        onBack()
-                    }
+                    activeViewModel.registerUser()
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !uiState.isSaving
             ) {
-                Text("Cadastrar")
+                Text(if (uiState.isSaving) "Cadastrando..." else "Cadastrar")
             }
 
             Spacer(modifier = Modifier.height(16.dp))

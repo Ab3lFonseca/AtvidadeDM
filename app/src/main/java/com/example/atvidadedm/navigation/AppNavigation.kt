@@ -1,10 +1,10 @@
 package com.example.atvidadedm.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
-import androidx.navigation3.runtime.entryProvider
-import androidx.navigation3.ui.NavDisplay
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import com.example.atvidadedm.ui.screen.ForgotPasswordScreen
 import com.example.atvidadedm.ui.screen.LoginScreen
 import com.example.atvidadedm.ui.screen.MenuScreen
@@ -18,49 +18,72 @@ import com.example.atvidadedm.ui.screen.RegisterScreen
 @Composable
 fun AppNavigation() {
     // Pilha de navegação: começa na tela de Login
-    val backStack = remember { mutableStateListOf<Any>(LoginRoute) }
-
-    NavDisplay(
-        backStack = backStack,
-        onBack = { backStack.removeLastOrNull() },
-        entryProvider = entryProvider {
-
-            // ── Login ──────────────────────────────────────────────────────────
-            entry<LoginRoute> {
-                LoginScreen(
-                    onLoginSuccess = {
-                        // Limpa a pilha e vai direto ao Menu (sem voltar para Login)
-                        backStack.clear()
-                        backStack.add(MenuRoute)
-                    },
-                    onRegister = {
-                        backStack.add(RegisterRoute)
-                    },
-                    onForgotPassword = {
-                        backStack.add(ForgotPasswordRoute)
-                    }
-                )
-            }
-
-            // ── Cadastro ───────────────────────────────────────────────────────
-            entry<RegisterRoute> {
-                RegisterScreen(
-                    onBack = { backStack.removeLastOrNull() }
-                )
-            }
-
-            // ── Senha Esquecida ────────────────────────────────────────────────
-            entry<ForgotPasswordRoute> {
-                ForgotPasswordScreen(
-                    onBack = { backStack.removeLastOrNull() }
-                )
-            }
-
-            // ── Menu Principal ─────────────────────────────────────────────────
-            entry<MenuRoute> {
-                MenuScreen()
-            }
+    val backStack = remember { mutableStateListOf(RouteId.LOGIN) }
+    val currentRoute: String by remember(backStack) {
+        androidx.compose.runtime.derivedStateOf {
+            backStack.lastOrNull() ?: RouteId.LOGIN
         }
-    )
+    }
+
+    when (currentRoute) {
+        RouteId.LOGIN -> {
+            LoginScreen(
+                onLoginSuccess = {
+                    backStack.clear()
+                    backStack.add(RouteId.MENU)
+                },
+                onRegister = {
+                    backStack.add(RouteId.REGISTER)
+                },
+                onForgotPassword = {
+                    backStack.add(RouteId.FORGOT_PASSWORD)
+                }
+            )
+        }
+
+        RouteId.REGISTER -> {
+            RegisterScreen(
+                onBack = { backStack.popRouteOrStayAtRoot() }
+            )
+        }
+
+        RouteId.FORGOT_PASSWORD -> {
+            ForgotPasswordScreen(
+                onBack = { backStack.popRouteOrStayAtRoot() }
+            )
+        }
+
+        RouteId.MENU -> {
+            MenuScreen()
+        }
+
+        else -> {
+            LoginScreen(
+                onLoginSuccess = {
+                    backStack.clear()
+                    backStack.add(RouteId.MENU)
+                },
+                onRegister = {
+                    backStack.add(RouteId.REGISTER)
+                },
+                onForgotPassword = {
+                    backStack.add(RouteId.FORGOT_PASSWORD)
+                }
+            )
+        }
+    }
+}
+
+private object RouteId {
+    const val LOGIN = "login"
+    const val REGISTER = "register"
+    const val FORGOT_PASSWORD = "forgot_password"
+    const val MENU = "menu"
+}
+
+private fun SnapshotStateList<String>.popRouteOrStayAtRoot() {
+    if (size > 1) {
+        removeAt(lastIndex)
+    }
 }
 
