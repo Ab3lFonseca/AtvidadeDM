@@ -9,12 +9,9 @@ import com.example.atvidadedm.ui.screen.ForgotPasswordScreen
 import com.example.atvidadedm.ui.screen.LoginScreen
 import com.example.atvidadedm.ui.screen.MenuScreen
 import com.example.atvidadedm.ui.screen.RegisterScreen
+import kotlin.text.clear
 
-/**
- * Composable que configura toda a navegação do app usando Navigation 3.
- *
- * A pilha de navegação (backStack) começa com a Tela de Login.
- */
+
 @Composable
 fun AppNavigation() {
     // Pilha de navegação: começa na tela de Login
@@ -54,7 +51,12 @@ fun AppNavigation() {
         }
 
         RouteId.MENU -> {
-            MenuScreen()
+            MenuScreen(
+                onBack = {
+                    backStack.clear()
+                    backStack.add(RouteId.LOGIN)
+                }
+            )
         }
 
         else -> {
