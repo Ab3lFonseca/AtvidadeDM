@@ -1,91 +1,98 @@
 package com.example.atvidadedm.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.atvidadedm.ui.screen.ForgotPasswordScreen
 import com.example.atvidadedm.ui.screen.LoginScreen
 import com.example.atvidadedm.ui.screen.MenuScreen
 import com.example.atvidadedm.ui.screen.RegisterScreen
-import kotlin.text.clear
-
+import com.example.atvidadedm.ui.viewmodel.SessionViewModel
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 
 @Composable
 fun AppNavigation() {
-    // Pilha de navegação: começa na tela de Login
-    val backStack = remember { mutableStateListOf(RouteId.LOGIN) }
-    val currentRoute: String by remember(backStack) {
-        androidx.compose.runtime.derivedStateOf {
-            backStack.lastOrNull() ?: RouteId.LOGIN
-        }
-    }
+    val navController = rememberNavController()
+    val sessionViewModel: SessionViewModel = viewModel()
+    val sessionUiState by sessionViewModel.uiState.collectAsState()
 
-    when (currentRoute) {
-        RouteId.LOGIN -> {
+    NavHost(
+        navController = navController,
+        startDestination = AppRoutes.LOGIN
+    ) {
+        composable(AppRoutes.LOGIN) {
             LoginScreen(
-                onLoginSuccess = {
-                    backStack.clear()
-                    backStack.add(RouteId.MENU)
+                onLoginSuccess = { user ->
+                    sessionViewModel.startSession(user)
+                    navController.navigate(AppRoutes.MENU) {
+                        popUpTo(AppRoutes.LOGIN) {
+                            inclusive = true
+                        }
+                        launchSingleTop = true
+                    }
                 },
                 onRegister = {
-                    backStack.add(RouteId.REGISTER)
+                    navController.navigate(AppRoutes.REGISTER)
                 },
                 onForgotPassword = {
-                    backStack.add(RouteId.FORGOT_PASSWORD)
+                    navController.navigate(AppRoutes.FORGOT_PASSWORD)
                 }
             )
         }
 
-        RouteId.REGISTER -> {
+        composable(AppRoutes.REGISTER) {
             RegisterScreen(
-                onBack = { backStack.popRouteOrStayAtRoot() }
+                onBack = { navController.popBackStack() }
             )
         }
 
-        RouteId.FORGOT_PASSWORD -> {
+        composable(AppRoutes.FORGOT_PASSWORD) {
             ForgotPasswordScreen(
-                onBack = { backStack.popRouteOrStayAtRoot() }
+                onBack = { navController.popBackStack() }
             )
         }
 
-        RouteId.MENU -> {
-            MenuScreen(
-                onBack = {
-                    backStack.clear()
-                    backStack.add(RouteId.LOGIN)
+        composable(AppRoutes.MENU) {
+            val currentUser = sessionUiState.currentUser
+
+            if (currentUser == null) {
+                LaunchedEffect(Unit) {
+                    navController.navigate(AppRoutes.LOGIN) {
+                        popUpTo(AppRoutes.MENU) {
+                            inclusive = true
+                        }
+                    }
                 }
-            )
-        }
 
-        else -> {
-            LoginScreen(
-                onLoginSuccess = {
-                    backStack.clear()
-                    backStack.add(RouteId.MENU)
-                },
-                onRegister = {
-                    backStack.add(RouteId.REGISTER)
-                },
-                onForgotPassword = {
-                    backStack.add(RouteId.FORGOT_PASSWORD)
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
                 }
-            )
+            } else {
+                MenuScreen(
+                    currentUser = currentUser,
+                    onLogout = {
+                        sessionViewModel.clearSession()
+                        navController.navigate(AppRoutes.LOGIN) {
+                            popUpTo(AppRoutes.MENU) {
+                                inclusive = true
+                            }
+                        }
+                    }
+                )
+            }
         }
-    }
-}
-
-private object RouteId {
-    const val LOGIN = "login"
-    const val REGISTER = "register"
-    const val FORGOT_PASSWORD = "forgot_password"
-    const val MENU = "menu"
-}
-
-private fun SnapshotStateList<String>.popRouteOrStayAtRoot() {
-    if (size > 1) {
-        removeAt(lastIndex)
     }
 }
 

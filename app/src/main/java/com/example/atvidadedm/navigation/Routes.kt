@@ -1,14 +1,19 @@
 package com.example.atvidadedm.navigation
 
-/**
- * Rotas de navegação do aplicativo.
- * Cada objeto representa uma tela/destino da navegação.
- */
-data object LoginRoute
+object AppRoutes {
+	const val LOGIN = "login"
+	const val REGISTER = "register"
+	const val FORGOT_PASSWORD = "forgot_password"
+	const val MENU = "menu"
+}
 
-data object RegisterRoute
+object MenuRoutes {
+	const val HOME = "menu_home"
+	const val NEW_TRIP = "new_trip"
+	const val MY_TRIPS = "my_trips"
+	const val ABOUT = "about"
+	const val EDIT_TRIP_PATTERN = "edit_trip/{tripId}"
 
-data object ForgotPasswordRoute
-
-data object MenuRoute
+	fun editTrip(tripId: Long): String = "edit_trip/$tripId"
+}
 

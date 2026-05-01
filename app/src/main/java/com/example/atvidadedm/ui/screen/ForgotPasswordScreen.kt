@@ -17,12 +17,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
@@ -30,8 +35,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.atvidadedm.TravelApplication
 import com.example.atvidadedm.ui.theme.AtvidadeDMTheme
 import com.example.atvidadedm.ui.viewmodel.ForgotPasswordViewModel
+import com.example.atvidadedm.ui.viewmodel.ForgotPasswordViewModelFactory
 
 /**
  * Tela de Recuperação de Senha (Senha Esquecida).
@@ -42,11 +49,37 @@ import com.example.atvidadedm.ui.viewmodel.ForgotPasswordViewModel
 @Composable
 fun ForgotPasswordScreen(
     onBack: () -> Unit,
-    viewModel: ForgotPasswordViewModel = viewModel()
+    providedViewModel: ForgotPasswordViewModel? = null
 ) {
+    val context = LocalContext.current
+    val application = context.applicationContext as TravelApplication
+    val snackbarHostState = remember { SnackbarHostState() }
+    val defaultViewModel: ForgotPasswordViewModel = viewModel(
+        factory = remember {
+            ForgotPasswordViewModelFactory(application.userRepository)
+        }
+    )
+    val viewModel = providedViewModel ?: defaultViewModel
     val uiState by viewModel.uiState.collectAsState()
 
+    LaunchedEffect(uiState.feedbackMessage) {
+        uiState.feedbackMessage?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            viewModel.onFeedbackMessageShown()
+        }
+    }
+
+    LaunchedEffect(uiState.recoverySent) {
+        if (uiState.recoverySent) {
+            viewModel.onRecoveryHandled()
+            onBack()
+        }
+    }
+
     Scaffold(
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState)
+        },
         topBar = {
             TopAppBar(
                 title = { Text("Recuperar Senha") },
@@ -102,14 +135,11 @@ fun ForgotPasswordScreen(
 
             // Botão de Envio – valida e retorna para Login
             Button(
-                onClick = {
-                    if (viewModel.validate()) {
-                        onBack()
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
+                onClick = viewModel::submitRecovery,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !uiState.isSending
             ) {
-                Text("Enviar")
+                Text(if (uiState.isSending) "Enviando..." else "Enviar")
             }
         }
     }

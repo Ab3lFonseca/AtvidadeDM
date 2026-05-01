@@ -20,11 +20,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
@@ -33,8 +39,11 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.atvidadedm.TravelApplication
+import com.example.atvidadedm.data.local.UserEntity
 import com.example.atvidadedm.ui.theme.AtvidadeDMTheme
 import com.example.atvidadedm.ui.viewmodel.LoginViewModel
+import com.example.atvidadedm.ui.viewmodel.LoginViewModelFactory
 
 /**
  * Tela de Login do aplicativo de Gerenciamento de Viagens.
@@ -45,106 +54,142 @@ import com.example.atvidadedm.ui.viewmodel.LoginViewModel
  */
 @Composable
 fun LoginScreen(
-    onLoginSuccess: () -> Unit,
+    onLoginSuccess: (UserEntity) -> Unit,
     onRegister: () -> Unit,
     onForgotPassword: () -> Unit,
-    viewModel: LoginViewModel = viewModel()
+    providedViewModel: LoginViewModel? = null
 ) {
+    val context = LocalContext.current
+    val application = context.applicationContext as TravelApplication
+    val snackbarHostState = remember { SnackbarHostState() }
+    val defaultViewModel: LoginViewModel = viewModel(
+        factory = remember {
+            LoginViewModelFactory(application.userRepository)
+        }
+    )
+    val viewModel = providedViewModel ?: defaultViewModel
     val uiState by viewModel.uiState.collectAsState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 48.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Cabeçalho
-        Text(
-            text = "✈ Gerenciamento de Viagens",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.primary
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "Faça seu login para continuar",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Spacer(modifier = Modifier.height(40.dp))
-
-        // Campo de E-mail
-        OutlinedTextField(
-            value = uiState.email,
-            onValueChange = viewModel::onEmailChange,
-            label = { Text("E-mail") },
-            placeholder = { Text("exemplo@email.com") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Campo de Senha com toggle mostrar/ocultar
-        OutlinedTextField(
-            value = uiState.password,
-            onValueChange = viewModel::onPasswordChange,
-            label = { Text("Senha") },
-            visualTransformation = if (uiState.passwordVisible)
-                VisualTransformation.None
-            else
-                PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            trailingIcon = {
-                IconButton(onClick = viewModel::togglePasswordVisibility) {
-                    Icon(
-                        imageVector = if (uiState.passwordVisible)
-                            Icons.Filled.Visibility
-                        else
-                            Icons.Filled.VisibilityOff,
-                        contentDescription = if (uiState.passwordVisible)
-                            "Ocultar senha"
-                        else
-                            "Mostrar senha"
-                    )
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-
-        // Botão "Esqueceu a senha?" alinhado à direita
-        TextButton(
-            onClick = onForgotPassword,
-            modifier = Modifier.align(Alignment.End)
-        ) {
-            Text("Esqueceu a senha?")
+    LaunchedEffect(uiState.feedbackMessage) {
+        uiState.feedbackMessage?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            viewModel.onFeedbackMessageShown()
         }
+    }
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Botão de Login → navega para o Menu
-        Button(
-            onClick = onLoginSuccess,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Entrar")
+    LaunchedEffect(uiState.loggedUser) {
+        uiState.loggedUser?.let { user ->
+            onLoginSuccess(user)
+            viewModel.onLoginHandled()
         }
+    }
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Botão de Novo Usuário → navega para o Registro
-        OutlinedButton(
-            onClick = onRegister,
-            modifier = Modifier.fillMaxWidth()
+    Scaffold(
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState)
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .verticalScroll(rememberScrollState())
+                .padding(innerPadding)
+                .padding(horizontal = 24.dp, vertical = 48.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Novo Usuário")
+            Text(
+                text = "✈ Gerenciamento de Viagens",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Faça seu login para continuar",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(40.dp))
+
+            OutlinedTextField(
+                value = uiState.email,
+                onValueChange = viewModel::onEmailChange,
+                label = { Text("E-mail") },
+                placeholder = { Text("exemplo@email.com") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                isError = uiState.emailError != null,
+                supportingText = uiState.emailError?.let {
+                    { Text(it, color = MaterialTheme.colorScheme.error) }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = uiState.password,
+                onValueChange = viewModel::onPasswordChange,
+                label = { Text("Senha") },
+                visualTransformation = if (uiState.passwordVisible) {
+                    VisualTransformation.None
+                } else {
+                    PasswordVisualTransformation()
+                },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                isError = uiState.passwordError != null,
+                supportingText = uiState.passwordError?.let {
+                    { Text(it, color = MaterialTheme.colorScheme.error) }
+                },
+                trailingIcon = {
+                    IconButton(onClick = viewModel::togglePasswordVisibility) {
+                        Icon(
+                            imageVector = if (uiState.passwordVisible) {
+                                Icons.Filled.Visibility
+                            } else {
+                                Icons.Filled.VisibilityOff
+                            },
+                            contentDescription = if (uiState.passwordVisible) {
+                                "Ocultar senha"
+                            } else {
+                                "Mostrar senha"
+                            }
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            TextButton(
+                onClick = onForgotPassword,
+                modifier = Modifier.align(Alignment.End)
+            ) {
+                Text("Esqueceu a senha?")
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Button(
+                onClick = viewModel::login,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !uiState.isLoading
+            ) {
+                Text(if (uiState.isLoading) "Entrando..." else "Entrar")
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedButton(
+                onClick = onRegister,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Novo Usuário")
+            }
         }
     }
 }

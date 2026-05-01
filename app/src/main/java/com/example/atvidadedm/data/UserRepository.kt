@@ -28,11 +28,36 @@ class UserRepository(
 
         return if (rowId > 0) RegisterResult.Success else RegisterResult.Failure
     }
+
+    suspend fun authenticateUser(
+        email: String,
+        password: String
+    ): LoginResult {
+        val user = userDao.authenticate(
+            email = email.trim(),
+            password = password
+        )
+
+        return if (user != null) {
+            LoginResult.Success(user)
+        } else {
+            LoginResult.InvalidCredentials
+        }
+    }
+
+    suspend fun findUserByEmail(email: String): UserEntity? {
+        return userDao.getByEmail(email.trim())
+    }
 }
 
 sealed interface RegisterResult {
     data object Success : RegisterResult
     data object EmailAlreadyExists : RegisterResult
     data object Failure : RegisterResult
+}
+
+sealed interface LoginResult {
+    data class Success(val user: UserEntity) : LoginResult
+    data object InvalidCredentials : LoginResult
 }
 

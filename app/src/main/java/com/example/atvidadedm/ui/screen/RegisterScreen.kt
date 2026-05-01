@@ -40,8 +40,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.atvidadedm.data.UserRepository
-import com.example.atvidadedm.data.local.AppDatabase
+import com.example.atvidadedm.TravelApplication
 import com.example.atvidadedm.ui.theme.AtvidadeDMTheme
 import com.example.atvidadedm.ui.viewmodel.RegisterViewModel
 import com.example.atvidadedm.ui.viewmodel.RegisterViewModelFactory
@@ -58,14 +57,11 @@ fun RegisterScreen(
     providedViewModel: RegisterViewModel? = null
 ) {
     val context = LocalContext.current
+    val application = context.applicationContext as TravelApplication
     val snackbarHostState = remember { SnackbarHostState() }
     val defaultViewModel: RegisterViewModel = viewModel(
         factory = remember {
-            RegisterViewModelFactory(
-                UserRepository(
-                    AppDatabase.getInstance(context).userDao()
-                )
-            )
+            RegisterViewModelFactory(application.userRepository)
         }
     )
     val activeViewModel = providedViewModel ?: defaultViewModel
