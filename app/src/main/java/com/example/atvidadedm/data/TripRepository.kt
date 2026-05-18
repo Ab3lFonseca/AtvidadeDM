@@ -16,6 +16,18 @@ class TripRepository(
         return tripDao.getById(tripId)
     }
 
+    suspend fun getActiveTripByCityAndDate(
+        userId: Long,
+        city: String,
+        currentDate: Long
+    ): TripEntity? {
+        return tripDao.getActiveTripByCityAndDate(
+            userId = userId,
+            city = city.trim(),
+            currentDate = currentDate
+        )
+    }
+
     suspend fun saveTrip(
         tripId: Long?,
         destination: String,
@@ -32,6 +44,7 @@ class TripRepository(
             startDate = startDate,
             endDate = endDate,
             budget = budget,
+            totalSpent = 0.0,
             userId = userId
         )
 

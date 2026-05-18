@@ -20,6 +20,22 @@ interface TripDao {
     @Query("SELECT * FROM trips WHERE id = :tripId LIMIT 1")
     suspend fun getById(tripId: Long): TripEntity?
 
+    @Query(
+        """
+        SELECT * FROM trips
+        WHERE userId = :userId
+          AND LOWER(TRIM(destination)) = LOWER(TRIM(:city))
+          AND :currentDate BETWEEN start_date AND end_date
+        ORDER BY start_date DESC
+        LIMIT 1
+        """
+    )
+    suspend fun getActiveTripByCityAndDate(
+        userId: Long,
+        city: String,
+        currentDate: Long
+    ): TripEntity?
+
     @Query("DELETE FROM trips WHERE id = :tripId")
     suspend fun deleteById(tripId: Long)
 }

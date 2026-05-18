@@ -1,6 +1,7 @@
 package com.example.atvidadedm
 
 import android.app.Application
+import com.example.atvidadedm.data.LocationRepository
 import com.example.atvidadedm.data.TripRepository
 import com.example.atvidadedm.data.UserRepository
 import com.example.atvidadedm.data.local.AppDatabase
@@ -16,6 +17,10 @@ class TravelApplication : Application() {
 
     val tripRepository: TripRepository by lazy {
         TripRepository(database.tripDao())
+    }
+
+    val locationRepository: LocationRepository by lazy {
+        LocationRepository(applicationContext)
     }
 }
 
