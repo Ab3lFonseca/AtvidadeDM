@@ -54,7 +54,8 @@ import java.util.Locale
 @Composable
 fun MyTripsScreen(
     currentUserId: Long,
-    onEditTrip: (Long) -> Unit
+    onEditTrip: (Long) -> Unit,
+    onOpenPhotos: (Long) -> Unit
 ) {
     val context = LocalContext.current
     val application = context.applicationContext as TravelApplication
@@ -116,11 +117,12 @@ fun MyTripsScreen(
                         items = uiState.trips,
                         key = { it.id }
                     ) { trip ->
-                        TripDismissItem(
-                            trip = trip,
-                            onDelete = { viewModel.deleteTrip(trip.id) },
-                            onEdit = { onEditTrip(trip.id) }
-                        )
+                            TripDismissItem(
+                                trip = trip,
+                                onDelete = { viewModel.deleteTrip(trip.id) },
+                                onEdit = { onEditTrip(trip.id) },
+                                onOpenPhotos = { onOpenPhotos(trip.id) }
+                            )
                     }
                 }
             }
@@ -133,7 +135,8 @@ fun MyTripsScreen(
 private fun TripDismissItem(
     trip: TripEntity,
     onDelete: () -> Unit,
-    onEdit: () -> Unit
+    onEdit: () -> Unit,
+    onOpenPhotos: () -> Unit
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
@@ -156,7 +159,8 @@ private fun TripDismissItem(
     ) {
         TripCard(
             trip = trip,
-            onEdit = onEdit
+            onEdit = onEdit,
+            onOpenPhotos = onOpenPhotos
         )
     }
 }
@@ -200,7 +204,8 @@ private fun DeleteBackground(
 @Composable
 private fun TripCard(
     trip: TripEntity,
-    onEdit: () -> Unit
+    onEdit: () -> Unit,
+    onOpenPhotos: () -> Unit
 ) {
     val tripType = TripType.fromStorage(trip.type)
     val formatter = remember {
@@ -214,7 +219,7 @@ private fun TripCard(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
-                onClick = {},
+                onClick = onOpenPhotos,
                 onLongClick = onEdit
             )
     ) {

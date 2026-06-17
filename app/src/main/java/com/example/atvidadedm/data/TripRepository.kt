@@ -28,6 +28,16 @@ class TripRepository(
         )
     }
 
+    suspend fun getActiveTripByDate(
+        userId: Long,
+        currentDate: Long
+    ): TripEntity? {
+        return tripDao.getActiveTripByDate(
+            userId = userId,
+            currentDate = currentDate
+        )
+    }
+
     suspend fun saveTrip(
         tripId: Long?,
         destination: String,

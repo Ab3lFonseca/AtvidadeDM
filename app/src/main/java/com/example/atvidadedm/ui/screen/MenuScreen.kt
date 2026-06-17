@@ -207,7 +207,31 @@ fun MenuScreen(
                     .padding(innerPadding)
             ) {
                 composable(MenuRoutes.HOME) {
-                    HomeScreen(currentUser = currentUser)
+                    HomeScreen(
+                        currentUser = currentUser,
+                        onOpenRoteiro = { tripId -> navController.navigate(MenuRoutes.roteiro(tripId)) },
+                        onOpenPhotos = { tripId ->
+                            navController.navigate(MenuRoutes.tripPhotos(tripId))
+                        },
+                        onOpenPhotosFallback = {
+                            navController.navigate(MenuRoutes.MY_TRIPS)
+                        }
+                    )
+                }
+                composable(
+                    route = MenuRoutes.ROUTEIRO_PATTERN,
+                    arguments = listOf(
+                        navArgument("tripId") {
+                            type = NavType.LongType
+                        }
+                    )
+                ) { backStackEntry ->
+                    val tripId = backStackEntry.arguments?.getLong("tripId") ?: 0L
+                    RoteiroScreen(
+                        tripId = tripId,
+                        onOpenRoteiro = { navController.navigate(MenuRoutes.roteiro(tripId)) },
+                        onOpenPhotos = { navController.navigate(MenuRoutes.tripPhotos(tripId)) }
+                    )
                 }
                 composable(MenuRoutes.NEW_TRIP) {
                     NewTripScreen(
@@ -226,6 +250,9 @@ fun MenuScreen(
                         currentUserId = currentUser.id,
                         onEditTrip = { tripId ->
                             navController.navigate(MenuRoutes.editTrip(tripId))
+                        },
+                        onOpenPhotos = { tripId ->
+                            navController.navigate(MenuRoutes.tripPhotos(tripId))
                         }
                     )
                 }
@@ -252,6 +279,21 @@ fun MenuScreen(
                         }
                     )
                 }
+                composable(
+                    route = MenuRoutes.TRIP_PHOTOS_PATTERN,
+                    arguments = listOf(
+                        navArgument("tripId") {
+                            type = NavType.LongType
+                        }
+                    )
+                ) { backStackEntry ->
+                    val tripId = backStackEntry.arguments?.getLong("tripId") ?: 0L
+                    TripPhotosScreen(
+                        tripId = tripId,
+                        onOpenRoteiro = { navController.navigate(MenuRoutes.roteiro(tripId)) },
+                        onOpenPhotos = { }
+                    )
+                }
             }
         }
     }
@@ -259,6 +301,8 @@ fun MenuScreen(
 
 private fun currentTitle(route: String): String {
     return when {
+        route == MenuRoutes.ROUTEIRO_PATTERN || route.startsWith("roteiro/") -> "Roteiro"
+        route == MenuRoutes.TRIP_PHOTOS_PATTERN || route.startsWith("trip_photos/") -> "Fotos"
         route == MenuRoutes.NEW_TRIP -> "Nova viagem"
         route == MenuRoutes.MY_TRIPS -> "Minhas viagens"
         route == MenuRoutes.ABOUT -> "Sobre"

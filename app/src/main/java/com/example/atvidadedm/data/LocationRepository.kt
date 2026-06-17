@@ -1,7 +1,7 @@
 package com.example.atvidadedm.data
 
-import android.annotation.SuppressLint
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Geocoder
@@ -14,6 +14,7 @@ import com.google.android.gms.tasks.Task
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.IOException
 import java.util.Locale
 import kotlin.coroutines.resume
@@ -43,7 +44,11 @@ class LocationRepository(
             if (city.isNullOrBlank()) {
                 LocationLookupResult.CityNotFound
             } else {
-                LocationLookupResult.Success(city)
+                LocationLookupResult.Success(
+                    city = city,
+                    latitude = location.latitude,
+                    longitude = location.longitude
+                )
             }
         } catch (_: SecurityException) {
             LocationLookupResult.PermissionDenied
@@ -63,11 +68,13 @@ class LocationRepository(
                 return lastKnown
             }
 
-            val cancellationTokenSource = CancellationTokenSource()
-            fusedClient.getCurrentLocation(
-                com.google.android.gms.location.Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-                cancellationTokenSource.token
-            ).awaitOrNull()
+            withTimeoutOrNull(8_000L) {
+                val cancellationTokenSource = CancellationTokenSource()
+                fusedClient.getCurrentLocation(
+                    com.google.android.gms.location.Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                    cancellationTokenSource.token
+                ).awaitOrNull()
+            }
         } catch (_: SecurityException) {
             null
         }
@@ -123,7 +130,11 @@ class LocationRepository(
 }
 
 sealed interface LocationLookupResult {
-    data class Success(val city: String) : LocationLookupResult
+    data class Success(
+        val city: String,
+        val latitude: Double,
+        val longitude: Double
+    ) : LocationLookupResult
     data object PermissionDenied : LocationLookupResult
     data object LocationUnavailable : LocationLookupResult
     data object CityNotFound : LocationLookupResult
@@ -148,4 +159,3 @@ private suspend fun <T> Task<T>.awaitOrNull(): T? {
         }
     }
 }
-

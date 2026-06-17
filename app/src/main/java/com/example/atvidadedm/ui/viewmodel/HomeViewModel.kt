@@ -17,6 +17,8 @@ data class HomeUiState(
 	val permissionGranted: Boolean = false,
 	val permissionRequested: Boolean = false,
 	val currentCity: String? = null,
+	val currentLatitude: Double? = null,
+	val currentLongitude: Double? = null,
 	val activeTrip: TripEntity? = null,
 	val message: String? = null
 )
@@ -37,6 +39,7 @@ class HomeViewModel(
 	fun onPermissionResult(granted: Boolean) {
 		_uiState.update {
 			it.copy(
+				isLoading = false,
 				permissionGranted = granted,
 				permissionRequested = true,
 				message = if (granted) null else "Permissao de localizacao negada."
@@ -50,13 +53,22 @@ class HomeViewModel(
 
 	fun refreshCurrentTripFromLocation() {
 		if (!_uiState.value.permissionGranted) {
+			loadCurrentTripFallback()
 			return
 		}
 
 		viewModelScope.launch {
 			_uiState.update { it.copy(isLoading = true, message = null) }
 
-			when (val result = locationRepository.getCurrentCity()) {
+			val result = try {
+				locationRepository.getCurrentCity()
+			} catch (t: Throwable) {
+				// Em caso de erro inesperado, tenta o fallback por data e registra mensagem
+				loadCurrentTripFallback(message = "Erro ao obter localizacao: ${t.message}")
+				return@launch
+			}
+
+			when (result) {
 				is LocationLookupResult.Success -> {
 					val now = System.currentTimeMillis()
 					val trip = tripRepository.getActiveTripByCityAndDate(
@@ -64,11 +76,14 @@ class HomeViewModel(
 						city = result.city,
 						currentDate = now
 					)
+						?: tripRepository.getActiveTripByDate(userId = userId, currentDate = now)
 
 					_uiState.update {
 						it.copy(
 							isLoading = false,
 							currentCity = result.city,
+							currentLatitude = result.latitude,
+							currentLongitude = result.longitude,
 							activeTrip = trip,
 							message = if (trip == null) {
 								"Nenhuma viagem em andamento para ${result.city}."
@@ -80,35 +95,35 @@ class HomeViewModel(
 				}
 
 				LocationLookupResult.PermissionDenied -> {
-					_uiState.update {
-						it.copy(
-							isLoading = false,
-							message = "Permissao de localizacao nao concedida."
-						)
-					}
+					loadCurrentTripFallback(message = "Permissao de localizacao nao concedida.")
 				}
 
 				LocationLookupResult.LocationUnavailable -> {
-					_uiState.update {
-						it.copy(
-							isLoading = false,
-							activeTrip = null,
-							message = "Nao foi possivel obter a localizacao atual."
-						)
-					}
+					loadCurrentTripFallback(message = "Nao foi possivel obter a localizacao atual.")
 				}
 
 				LocationLookupResult.CityNotFound -> {
-					_uiState.update {
-						it.copy(
-							isLoading = false,
-							activeTrip = null,
-							message = "Nao foi possivel identificar a cidade atual."
-						)
-					}
+					loadCurrentTripFallback(message = "Nao foi possivel identificar a cidade atual.")
 				}
 			}
 		}
 	}
-}
 
+	private fun loadCurrentTripFallback(message: String? = null) {
+		viewModelScope.launch {
+			val now = System.currentTimeMillis()
+			val trip = tripRepository.getActiveTripByDate(userId = userId, currentDate = now)
+			_uiState.update {
+				it.copy(
+					isLoading = false,
+					activeTrip = trip,
+					message = message ?: if (trip == null) {
+						"Nenhuma viagem em andamento foi encontrada."
+					} else {
+						null
+					}
+				)
+			}
+		}
+	}
+}
