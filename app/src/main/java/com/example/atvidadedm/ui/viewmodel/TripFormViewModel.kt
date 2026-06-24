@@ -5,11 +5,21 @@ import androidx.lifecycle.viewModelScope
 import com.example.atvidadedm.data.TripRepository
 import com.example.atvidadedm.data.TripSaveResult
 import com.example.atvidadedm.data.model.TripType
+import com.example.atvidadedm.data.remote.gemini.GeminiRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+private val tripFormDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern(
+    "dd/MM/yyyy",
+    Locale.Builder().setLanguage("pt").setRegion("BR").build()
+)
 
 data class TripFormUiState(
     val tripId: Long? = null,
@@ -18,6 +28,7 @@ data class TripFormUiState(
     val startDate: Long? = null,
     val endDate: Long? = null,
     val budget: String = "",
+    val comments: String = "",
     val destinationError: String? = null,
     val startDateError: String? = null,
     val endDateError: String? = null,
@@ -25,7 +36,9 @@ data class TripFormUiState(
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
     val feedbackMessage: String? = null,
-    val saveCompleted: Boolean = false
+    val saveCompleted: Boolean = false,
+    val savedTripId: Long? = null,
+    val itinerary: String? = null
 ) {
     val isEditMode: Boolean
         get() = tripId != null && tripId > 0
@@ -33,6 +46,7 @@ data class TripFormUiState(
 
 class TripFormViewModel(
     private val tripRepository: TripRepository,
+    private val geminiRepository: GeminiRepository,
     private val userId: Long,
     private val tripId: Long?
 ) : ViewModel() {
@@ -67,6 +81,10 @@ class TripFormViewModel(
         _uiState.update { it.copy(budget = normalized, budgetError = null) }
     }
 
+    fun onCommentsChange(comments: String) {
+        _uiState.update { it.copy(comments = comments) }
+    }
+
     fun saveTrip() {
         if (!validate()) {
             return
@@ -78,23 +96,36 @@ class TripFormViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, feedbackMessage = null) }
 
-            when (
-                tripRepository.saveTrip(
-                    tripId = state.tripId,
-                    destination = state.destination,
-                    type = state.type,
-                    startDate = state.startDate!!,
-                    endDate = state.endDate!!,
-                    budget = parsedBudget,
-                    userId = userId
-                )
-            ) {
+            val itinerary = if (state.isEditMode) {
+                state.itinerary
+            } else {
+                generateItineraryForNewTrip(state)
+            }
+
+            val saveResult = tripRepository.saveTrip(
+                tripId = state.tripId,
+                destination = state.destination,
+                type = state.type,
+                startDate = state.startDate!!,
+                endDate = state.endDate!!,
+                budget = parsedBudget,
+                comments = state.comments,
+                itinerary = itinerary,
+                userId = userId
+            )
+
+            when (saveResult) {
                 is TripSaveResult.Created -> {
                     _uiState.update {
                         it.copy(
                             isSaving = false,
-                            feedbackMessage = "Viagem cadastrada com sucesso!",
-                            saveCompleted = true
+                            feedbackMessage = if (itinerary.isNullOrBlank()) {
+                                "Viagem cadastrada com sucesso, mas não foi possível gerar o roteiro."
+                            } else {
+                                "Viagem cadastrada com roteiro gerado com sucesso!"
+                            },
+                            saveCompleted = true,
+                            savedTripId = saveResult.id
                         )
                     }
                 }
@@ -104,7 +135,8 @@ class TripFormViewModel(
                         it.copy(
                             isSaving = false,
                             feedbackMessage = "Viagem atualizada com sucesso!",
-                            saveCompleted = true
+                            saveCompleted = true,
+                            savedTripId = state.tripId
                         )
                     }
                 }
@@ -148,11 +180,41 @@ class TripFormViewModel(
                         startDate = trip.startDate,
                         endDate = trip.endDate,
                         budget = trip.budget.toString(),
+                        comments = trip.comments,
+                            itinerary = trip.itinerary,
                         isLoading = false
                     )
                 }
             }
         }
+    }
+
+    private suspend fun generateItineraryForNewTrip(state: TripFormUiState): String? {
+        val prompt = buildPromptForNewTrip(state)
+        return geminiRepository.generateItinerary(prompt).getOrNull()?.takeIf { it.isNotBlank() }
+    }
+
+    private fun buildPromptForNewTrip(state: TripFormUiState): String {
+        val start = state.startDate?.toFormattedDate().orEmpty()
+        val end = state.endDate?.toFormattedDate().orEmpty()
+        val comments = state.comments.ifBlank { "sem comentários adicionais" }
+
+        return """
+            Você é um especialista em turismo e deve criar um roteiro prático e objetivo em português do Brasil.
+
+            Dados da viagem:
+            - Destino: ${state.destination.trim()}
+            - Tipo: ${state.type.label}
+            - Período: $start até $end
+            - Orçamento: R$ ${state.budget.replace(',', '.')}
+            - Comentários: $comments
+
+            Regras:
+            - Organize a resposta por dias.
+            - Sugira atividades de manhã, tarde e noite quando fizer sentido.
+            - Considere o orçamento informado.
+            - Finalize com dicas rápidas e úteis.
+        """.trimIndent()
     }
 
     private fun validate(): Boolean {
@@ -200,5 +262,11 @@ class TripFormViewModel(
 
         return isValid
     }
-}
 
+    private fun Long.toFormattedDate(): String {
+        return Instant.ofEpochMilli(this)
+            .atZone(ZoneOffset.UTC)
+            .toLocalDate()
+            .format(tripFormDateFormatter)
+    }
+}

@@ -55,6 +55,7 @@ import java.util.Locale
 fun MyTripsScreen(
     currentUserId: Long,
     onEditTrip: (Long) -> Unit,
+    onOpenRoteiro: (Long) -> Unit,
     onOpenPhotos: (Long) -> Unit
 ) {
     val context = LocalContext.current
@@ -121,6 +122,7 @@ fun MyTripsScreen(
                                 trip = trip,
                                 onDelete = { viewModel.deleteTrip(trip.id) },
                                 onEdit = { onEditTrip(trip.id) },
+                                onOpenRoteiro = { onOpenRoteiro(trip.id) },
                                 onOpenPhotos = { onOpenPhotos(trip.id) }
                             )
                     }
@@ -136,6 +138,7 @@ private fun TripDismissItem(
     trip: TripEntity,
     onDelete: () -> Unit,
     onEdit: () -> Unit,
+    onOpenRoteiro: () -> Unit,
     onOpenPhotos: () -> Unit
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
@@ -160,6 +163,7 @@ private fun TripDismissItem(
         TripCard(
             trip = trip,
             onEdit = onEdit,
+            onOpenRoteiro = onOpenRoteiro,
             onOpenPhotos = onOpenPhotos
         )
     }
@@ -205,6 +209,7 @@ private fun DeleteBackground(
 private fun TripCard(
     trip: TripEntity,
     onEdit: () -> Unit,
+    onOpenRoteiro: () -> Unit,
     onOpenPhotos: () -> Unit
 ) {
     val tripType = TripType.fromStorage(trip.type)
@@ -264,6 +269,14 @@ private fun TripCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.material3.TextButton(onClick = onOpenRoteiro) {
+                        Text("Roteiro")
+                    }
+                    androidx.compose.material3.TextButton(onClick = onOpenPhotos) {
+                        Text("Fotos")
+                    }
+                }
             }
         }
     }

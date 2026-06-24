@@ -34,6 +34,10 @@ data class TripEntity(
     @ColumnInfo(name = "total_spent")
     val totalSpent: Double = 0.0,
     @ColumnInfo(name = "userId")
-    val userId: Long
+    val userId: Long,
+    @ColumnInfo(name = "comments")
+    val comments: String = "",
+    @ColumnInfo(name = "itinerary")
+    val itinerary: String? = null
 )
 

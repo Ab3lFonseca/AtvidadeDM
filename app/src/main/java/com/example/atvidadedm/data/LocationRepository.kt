@@ -36,24 +36,22 @@ class LocationRepository(
             val location = fetchBestAvailableLocation()
                 ?: return LocationLookupResult.LocationUnavailable
 
-            val city = reverseGeocodeCity(
-                latitude = location.latitude,
-                longitude = location.longitude
-            )
-
-            if (city.isNullOrBlank()) {
-                LocationLookupResult.CityNotFound
-            } else {
-                LocationLookupResult.Success(
-                    city = city,
+            val city = withTimeoutOrNull(5_000L) {
+                reverseGeocodeCity(
                     latitude = location.latitude,
                     longitude = location.longitude
                 )
             }
+
+            LocationLookupResult.Success(
+                city = city,
+                latitude = location.latitude,
+                longitude = location.longitude
+            )
         } catch (_: SecurityException) {
             LocationLookupResult.PermissionDenied
         } catch (_: IOException) {
-            LocationLookupResult.CityNotFound
+            LocationLookupResult.LocationUnavailable
         }
     }
 
@@ -131,13 +129,12 @@ class LocationRepository(
 
 sealed interface LocationLookupResult {
     data class Success(
-        val city: String,
+        val city: String?,
         val latitude: Double,
         val longitude: Double
     ) : LocationLookupResult
     data object PermissionDenied : LocationLookupResult
     data object LocationUnavailable : LocationLookupResult
-    data object CityNotFound : LocationLookupResult
 }
 
 private suspend fun <T> Task<T>.awaitOrNull(): T? {

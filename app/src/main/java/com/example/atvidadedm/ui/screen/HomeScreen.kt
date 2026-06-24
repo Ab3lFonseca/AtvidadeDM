@@ -2,9 +2,6 @@ package com.example.atvidadedm.ui.screen
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.graphics.Color as AndroidColor
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +21,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -34,6 +32,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.atvidadedm.TravelApplication
 import com.example.atvidadedm.data.local.TripEntity
@@ -41,11 +42,19 @@ import com.example.atvidadedm.data.local.UserEntity
 import com.example.atvidadedm.data.model.TripType
 import com.example.atvidadedm.ui.viewmodel.HomeViewModel
 import com.example.atvidadedm.ui.viewmodel.HomeViewModelFactory
+import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
 import java.text.NumberFormat
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+private const val DEFAULT_MAP_LATITUDE = -14.235004
+private const val DEFAULT_MAP_LONGITUDE = -51.92528
 
 @Composable
 fun HomeScreen(
@@ -54,58 +63,14 @@ fun HomeScreen(
     onOpenPhotos: (Long) -> Unit,
     onOpenPhotosFallback: () -> Unit
 ) {
-    val context = LocalContext.current
-    val application = context.applicationContext as TravelApplication
-    val viewModel: HomeViewModel = viewModel(
-        factory = remember(currentUser.id) {
-            HomeViewModelFactory(
-                tripRepository = application.tripRepository,
-                locationRepository = application.locationRepository,
-                userId = currentUser.id
-            )
-        }
-    )
-    val uiState by viewModel.uiState.collectAsState()
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-        onResult = viewModel::onPermissionResult
-    )
-
-    val hasLocationPermission =
-        ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-
-    LaunchedEffect(hasLocationPermission) {
-        if (hasLocationPermission) {
-            viewModel.onPermissionResult(true)
-        } else if (!uiState.permissionRequested) {
-            viewModel.markPermissionRequested()
-            permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-        }
-    }
-
     Scaffold(
         bottomBar = {
-                TripBottomBar(
-                    selectedDestination = null,
-                    showPhotoTab = true, // habilita a aba Fotos sempre; o fallback abre Minhas viagens
-                    onOpenRoteiro = {
-                        uiState.activeTrip?.let { activeTrip ->
-                            onOpenRoteiro(activeTrip.id)
-                        } ?: onOpenRoteiro(0L)
-                    },
-                    onOpenPhotos = {
-                        uiState.activeTrip?.let { activeTrip ->
-                            onOpenPhotos(activeTrip.id)
-                        } ?: onOpenPhotosFallback()
-                    }
-                )
+            TripBottomBar(
+                selectedDestination = null,
+                showPhotoTab = true,
+                onOpenRoteiro = { onOpenPhotosFallback() },
+                onOpenPhotos = { onOpenPhotosFallback() }
+            )
         }
     ) { innerPadding ->
         Column(
@@ -123,64 +88,38 @@ fun HomeScreen(
                 color = MaterialTheme.colorScheme.primary
             )
             Text(
-                text = "Quando houver uma viagem em andamento, o mapa abaixo mostrará sua localização atual.",
+                text = "Nesta tela o mapa é apenas visual, sem ações extras.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
 
-            when {
-                uiState.isLoading -> {
-                    CircularProgressIndicator(modifier = Modifier.padding(top = 8.dp))
-                }
-
-                !hasLocationPermission -> {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("Mapa da viagem", style = MaterialTheme.typography.titleLarge)
                     Text(
-                        text = "Permita o acesso a localizacao para buscar sua viagem atual automaticamente.",
+                        text = "Visualização ilustrativa do mapa, sem atualização de localização ou botões de ação.",
                         style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Button(onClick = {
-                        viewModel.markPermissionRequested()
-                        permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-                    }) {
-                        Text("Permitir localizacao")
-                    }
-                }
 
-                else -> {
-                    uiState.currentCity?.let { city ->
-                        Text(
-                            text = "Cidade atual: $city",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    uiState.activeTrip?.let { trip ->
-                        CurrentTripMapCard(
-                            trip = trip,
-                            latitude = uiState.currentLatitude,
-                            longitude = uiState.currentLongitude
-                        )
-                    }
-
-                    uiState.activeTrip?.let { trip ->
-                        ActiveTripCard(trip = trip)
-                    }
-
-                    uiState.message?.let { message ->
-                        Text(
-                            text = message,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-
-                    Button(onClick = viewModel::refreshCurrentTripFromLocation) {
-                        Text("Atualizar localizacao")
-                    }
+                    OsmTripMapView(
+                        latitude = DEFAULT_MAP_LATITUDE,
+                        longitude = DEFAULT_MAP_LONGITUDE,
+                        destination = "Mapa ilustrativo",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(240.dp)
+                    )
                 }
             }
         }
@@ -189,14 +128,11 @@ fun HomeScreen(
 
 @Composable
 private fun CurrentTripMapCard(
-    trip: TripEntity,
+    trip: TripEntity?,
+    currentCity: String?,
     latitude: Double?,
     longitude: Double?
 ) {
-    if (latitude == null || longitude == null) {
-        return
-    }
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -210,38 +146,31 @@ private fun CurrentTripMapCard(
         ) {
             Text("Mapa da viagem atual", style = MaterialTheme.typography.titleLarge)
             Text(
-                text = "Local atual da viagem para ${trip.destination}",
+                text = when {
+                    trip != null -> "Local atual da viagem para ${trip.destination}"
+                    !currentCity.isNullOrBlank() -> "Localização atual em $currentCity"
+                    else -> "Aguardando localização atual"
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Box(
+            if (latitude == null || longitude == null) {
+                Text(
+                    text = "A localização ainda não foi carregada. O mapa será exibido com uma posição padrão até a atualização.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            OsmTripMapView(
+                latitude = latitude ?: DEFAULT_MAP_LATITUDE,
+                longitude = longitude ?: DEFAULT_MAP_LONGITUDE,
+                destination = trip?.destination ?: currentCity ?: "Localização atual",
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(240.dp)
-                    .padding(top = 4.dp)
-            ) {
-                AndroidView(
-                    factory = { context ->
-                        WebView(context).apply {
-                            settings.javaScriptEnabled = true
-                            settings.domStorageEnabled = true
-                            webViewClient = WebViewClient()
-                            setBackgroundColor(AndroidColor.TRANSPARENT)
-                        }
-                    },
-                    update = { webView ->
-                        webView.loadDataWithBaseURL(
-                            "https://localhost/",
-                            tripMapHtml(latitude, longitude),
-                            "text/html",
-                            "UTF-8",
-                            null
-                        )
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+            )
         }
     }
 }
@@ -269,51 +198,79 @@ private fun ActiveTripCard(trip: TripEntity) {
         ) {
             Text("Viagem atual", style = MaterialTheme.typography.titleLarge)
             Text("Destino: ${trip.destination}")
-            Text("Data inicio: ${formatDate(trip.startDate, dateFormatter)}")
+            Text("Data início: ${formatDate(trip.startDate, dateFormatter)}")
             Text("Data fim: ${formatDate(trip.endDate, dateFormatter)}")
             Text("Tipo: ${tripType.label}")
-            Text("Orcamento: ${currencyFormatter.format(trip.budget)}")
+            Text("Orçamento: ${currencyFormatter.format(trip.budget)}")
             Text("Total de gastos: ${currencyFormatter.format(trip.totalSpent)}")
         }
     }
 }
 
-private fun tripMapHtml(latitude: Double, longitude: Double): String {
-    return """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <style>
-                html, body, #map {
-                    margin: 0;
-                    padding: 0;
-                    width: 100%;
-                    height: 100%;
-                }
-            </style>
-            <link
-                rel="stylesheet"
-                href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-            />
-            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        </head>
-        <body>
-            <div id="map"></div>
-            <script>
-                const map = L.map('map').setView([$latitude, $longitude], 15);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    maxZoom: 19,
-                    attribution: '&copy; OpenStreetMap contributors'
-                }).addTo(map);
-                L.marker([$latitude, $longitude])
-                    .addTo(map)
-                    .bindPopup('Localização atual')
-                    .openPopup();
-            </script>
-        </body>
-        </html>
-    """.trimIndent()
+@Composable
+private fun OsmTripMapView(
+    latitude: Double,
+    longitude: Double,
+    destination: String,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Configure osmdroid
+    LaunchedEffect(Unit) {
+        try {
+            Configuration.getInstance().apply {
+                userAgentValue = "AtvidadeDM"
+                // Use memory cache instead of SharedPreferences to avoid deprecation
+                cacheMapTileCount = 100
+            }
+        } catch (_: Exception) {
+            // Ignore configuration errors
+        }
+    }
+
+    val mapView = remember {
+        MapView(context).apply {
+            setTileSource(TileSourceFactory.MAPNIK)
+            setMultiTouchControls(true)
+            controller.setZoom(13.0)
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, mapView) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> mapView.onResume()
+                Lifecycle.Event.ON_PAUSE -> mapView.onPause()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            mapView.onDetach()
+        }
+    }
+
+    LaunchedEffect(latitude, longitude, destination) {
+        val geoPoint = GeoPoint(latitude, longitude)
+        mapView.controller.setZoom(13.0)
+        mapView.controller.setCenter(geoPoint)
+        mapView.overlays.clear()
+
+        val marker = Marker(mapView)
+        marker.position = geoPoint
+        marker.title = destination
+        marker.snippet = "Localização atual da viagem"
+        mapView.overlays.add(marker)
+        mapView.invalidate()
+    }
+
+    AndroidView(
+        factory = { mapView },
+        modifier = modifier
+    )
 }
 
 private fun formatDate(

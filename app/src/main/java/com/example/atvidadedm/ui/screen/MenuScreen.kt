@@ -228,6 +228,7 @@ fun MenuScreen(
                 ) { backStackEntry ->
                     val tripId = backStackEntry.arguments?.getLong("tripId") ?: 0L
                     RoteiroScreen(
+                        currentUserId = currentUser.id,
                         tripId = tripId,
                         onOpenRoteiro = { navController.navigate(MenuRoutes.roteiro(tripId)) },
                         onOpenPhotos = { navController.navigate(MenuRoutes.tripPhotos(tripId)) }
@@ -237,10 +238,17 @@ fun MenuScreen(
                     NewTripScreen(
                         currentUserId = currentUser.id,
                         onBack = { navController.popBackStack() },
-                        onSaved = {
-                            navController.navigate(MenuRoutes.MY_TRIPS) {
-                                popUpTo(MenuRoutes.HOME)
-                                launchSingleTop = true
+                        onSaved = { savedTripId ->
+                            if (savedTripId != null && savedTripId > 0) {
+                                navController.navigate(MenuRoutes.roteiro(savedTripId)) {
+                                    popUpTo(MenuRoutes.HOME)
+                                    launchSingleTop = true
+                                }
+                            } else {
+                                navController.navigate(MenuRoutes.MY_TRIPS) {
+                                    popUpTo(MenuRoutes.HOME)
+                                    launchSingleTop = true
+                                }
                             }
                         }
                     )
@@ -250,6 +258,9 @@ fun MenuScreen(
                         currentUserId = currentUser.id,
                         onEditTrip = { tripId ->
                             navController.navigate(MenuRoutes.editTrip(tripId))
+                        },
+                        onOpenRoteiro = { tripId ->
+                            navController.navigate(MenuRoutes.roteiro(tripId))
                         },
                         onOpenPhotos = { tripId ->
                             navController.navigate(MenuRoutes.tripPhotos(tripId))

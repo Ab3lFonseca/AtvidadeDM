@@ -45,8 +45,16 @@ class TripRepository(
         startDate: Long,
         endDate: Long,
         budget: Double,
+        comments: String = "",
+        itinerary: String? = null,
         userId: Long
     ): TripSaveResult {
+        val existingTrip = if (tripId != null && tripId > 0) {
+            tripDao.getById(tripId)
+        } else {
+            null
+        }
+
         val trip = TripEntity(
             id = tripId ?: 0,
             destination = destination.trim(),
@@ -55,7 +63,9 @@ class TripRepository(
             endDate = endDate,
             budget = budget,
             totalSpent = 0.0,
-            userId = userId
+            userId = userId,
+            comments = comments.trim(),
+            itinerary = itinerary ?: existingTrip?.itinerary
         )
 
         return if (tripId != null && tripId > 0) {

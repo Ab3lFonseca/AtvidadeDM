@@ -53,7 +53,7 @@ fun NewTripScreen(
     currentUserId: Long,
     tripId: Long? = null,
     onBack: () -> Unit,
-    onSaved: () -> Unit
+    onSaved: (Long?) -> Unit
 ) {
     val context = LocalContext.current
     val application = context.applicationContext as TravelApplication
@@ -62,6 +62,7 @@ fun NewTripScreen(
         factory = remember(currentUserId, tripId) {
             TripFormViewModelFactory(
                 tripRepository = application.tripRepository,
+                geminiRepository = application.geminiRepository,
                 userId = currentUserId,
                 tripId = tripId
             )
@@ -83,8 +84,9 @@ fun NewTripScreen(
 
     LaunchedEffect(uiState.saveCompleted) {
         if (uiState.saveCompleted) {
+            val savedTripId = uiState.savedTripId
             viewModel.onSaveHandled()
-            onSaved()
+            onSaved(savedTripId)
         }
     }
 
@@ -189,6 +191,15 @@ fun NewTripScreen(
                         { Text(it, color = MaterialTheme.colorScheme.error) }
                     },
                     singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = uiState.comments,
+                    onValueChange = viewModel::onCommentsChange,
+                    label = { Text("Comentários adicionais") },
+                    placeholder = { Text("Adicione detalhes sobre a viagem (opcional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))

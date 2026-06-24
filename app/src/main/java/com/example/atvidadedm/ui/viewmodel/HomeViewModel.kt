@@ -71,12 +71,13 @@ class HomeViewModel(
 			when (result) {
 				is LocationLookupResult.Success -> {
 					val now = System.currentTimeMillis()
-					val trip = tripRepository.getActiveTripByCityAndDate(
-						userId = userId,
-						city = result.city,
-						currentDate = now
-					)
-						?: tripRepository.getActiveTripByDate(userId = userId, currentDate = now)
+					val trip = result.city?.let { city ->
+						tripRepository.getActiveTripByCityAndDate(
+							userId = userId,
+							city = city,
+							currentDate = now
+						)
+					} ?: tripRepository.getActiveTripByDate(userId = userId, currentDate = now)
 
 					_uiState.update {
 						it.copy(
@@ -100,10 +101,6 @@ class HomeViewModel(
 
 				LocationLookupResult.LocationUnavailable -> {
 					loadCurrentTripFallback(message = "Nao foi possivel obter a localizacao atual.")
-				}
-
-				LocationLookupResult.CityNotFound -> {
-					loadCurrentTripFallback(message = "Nao foi possivel identificar a cidade atual.")
 				}
 			}
 		}
