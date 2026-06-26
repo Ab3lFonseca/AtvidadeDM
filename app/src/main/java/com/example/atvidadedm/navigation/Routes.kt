@@ -5,6 +5,11 @@ object AppRoutes {
 	const val REGISTER = "register"
 	const val FORGOT_PASSWORD = "forgot_password"
 	const val MENU = "menu"
+	const val ROUTEIRO_PATTERN = "roteiro_screen/{tripId}"
+	const val TRIP_PHOTOS_PATTERN = "trip_photos_screen/{tripId}"
+
+	fun roteiro(tripId: Long): String = "roteiro_screen/$tripId"
+	fun tripPhotos(tripId: Long): String = "trip_photos_screen/$tripId"
 }
 
 object MenuRoutes {

@@ -2,10 +2,10 @@ package com.example.atvidadedm.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.atvidadedm.data.TripDestinationRepository
 import com.example.atvidadedm.data.TripRepository
 import com.example.atvidadedm.data.TripSaveResult
 import com.example.atvidadedm.data.model.TripType
-import com.example.atvidadedm.data.remote.gemini.GeminiRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,6 +29,7 @@ data class TripFormUiState(
     val endDate: Long? = null,
     val budget: String = "",
     val comments: String = "",
+    val finalDestination: String = "",
     val destinationError: String? = null,
     val startDateError: String? = null,
     val endDateError: String? = null,
@@ -46,11 +47,10 @@ data class TripFormUiState(
 
 class TripFormViewModel(
     private val tripRepository: TripRepository,
-    private val geminiRepository: GeminiRepository,
+    private val tripDestinationRepository: TripDestinationRepository,
     private val userId: Long,
     private val tripId: Long?
 ) : ViewModel() {
-
     private val _uiState = MutableStateFlow(TripFormUiState(isLoading = tripId != null && tripId > 0))
     val uiState: StateFlow<TripFormUiState> = _uiState.asStateFlow()
 
@@ -62,6 +62,10 @@ class TripFormViewModel(
 
     fun onDestinationChange(destination: String) {
         _uiState.update { it.copy(destination = destination, destinationError = null) }
+    }
+
+    fun onFinalDestinationChange(destination: String) {
+        _uiState.update { it.copy(finalDestination = destination, destinationError = null) }
     }
 
     fun onTypeChange(type: TripType) {
@@ -92,37 +96,40 @@ class TripFormViewModel(
 
         val state = _uiState.value
         val parsedBudget = state.budget.replace(',', '.').toDoubleOrNull() ?: 0.0
+        val initialDestination = state.destination.trim()
+        val finalDestination = state.finalDestination.trim()
+        val orderedDestinationNames = buildOrderedDestinationNames(initialDestination, finalDestination)
+        val existingItinerary = if (state.isEditMode) state.itinerary else null
 
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, feedbackMessage = null) }
 
-            val itinerary = if (state.isEditMode) {
-                state.itinerary
-            } else {
-                generateItineraryForNewTrip(state)
-            }
-
             val saveResult = tripRepository.saveTrip(
                 tripId = state.tripId,
-                destination = state.destination,
+                destination = finalDestination,
                 type = state.type,
                 startDate = state.startDate!!,
                 endDate = state.endDate!!,
                 budget = parsedBudget,
                 comments = state.comments,
-                itinerary = itinerary,
+                itinerary = existingItinerary,
                 userId = userId
             )
 
             when (saveResult) {
                 is TripSaveResult.Created -> {
+                    tripDestinationRepository.replaceTripDestinations(
+                        tripId = saveResult.id,
+                        destinationsInOrder = orderedDestinationNames,
+                        finalDestination = finalDestination
+                    )
                     _uiState.update {
                         it.copy(
                             isSaving = false,
-                            feedbackMessage = if (itinerary.isNullOrBlank()) {
-                                "Viagem cadastrada com sucesso, mas não foi possível gerar o roteiro."
+                            feedbackMessage = if (existingItinerary.isNullOrBlank()) {
+                                "Viagem cadastrada com sucesso. O roteiro será gerado em seguida."
                             } else {
-                                "Viagem cadastrada com roteiro gerado com sucesso!"
+                                "Viagem cadastrada com sucesso!"
                             },
                             saveCompleted = true,
                             savedTripId = saveResult.id
@@ -131,6 +138,13 @@ class TripFormViewModel(
                 }
 
                 TripSaveResult.Updated -> {
+                    state.tripId?.let { updatedTripId ->
+                        tripDestinationRepository.replaceTripDestinations(
+                            tripId = updatedTripId,
+                            destinationsInOrder = orderedDestinationNames,
+                            finalDestination = finalDestination
+                        )
+                    }
                     _uiState.update {
                         it.copy(
                             isSaving = false,
@@ -153,12 +167,12 @@ class TripFormViewModel(
         }
     }
 
-    fun onFeedbackMessageShown() {
-        _uiState.update { it.copy(feedbackMessage = null) }
-    }
-
     fun onSaveHandled() {
         _uiState.update { it.copy(saveCompleted = false) }
+    }
+
+    fun onFeedbackMessageShown() {
+        _uiState.update { it.copy(feedbackMessage = null) }
     }
 
     private fun loadTrip(tripId: Long) {
@@ -172,10 +186,18 @@ class TripFormViewModel(
                     )
                 }
             } else {
+                val destinations = tripDestinationRepository.getTripDestinations(trip.id)
+                val orderedNames = destinations.sortedBy { it.orderIndex }.map { it.name }
+                val inferredInitial = orderedNames.firstOrNull() ?: trip.destination
+                val inferredFinal = destinations.firstOrNull { it.isFinal }?.name
+                    ?: orderedNames.lastOrNull()
+                    ?: trip.destination
+
                 _uiState.update {
                     it.copy(
                         tripId = trip.id,
-                        destination = trip.destination,
+                            destination = inferredInitial,
+                        finalDestination = inferredFinal,
                         type = TripType.fromStorage(trip.type),
                         startDate = trip.startDate,
                         endDate = trip.endDate,
@@ -189,33 +211,18 @@ class TripFormViewModel(
         }
     }
 
-    private suspend fun generateItineraryForNewTrip(state: TripFormUiState): String? {
-        val prompt = buildPromptForNewTrip(state)
-        return geminiRepository.generateItinerary(prompt).getOrNull()?.takeIf { it.isNotBlank() }
+
+    private fun buildOrderedDestinationNames(
+        initialDestination: String,
+        finalDestination: String
+    ): List<String> {
+        val result = linkedSetOf<String>()
+        if (initialDestination.isNotBlank()) result.add(initialDestination)
+        if (finalDestination.isNotBlank()) result.add(finalDestination)
+
+        return result.toList()
     }
 
-    private fun buildPromptForNewTrip(state: TripFormUiState): String {
-        val start = state.startDate?.toFormattedDate().orEmpty()
-        val end = state.endDate?.toFormattedDate().orEmpty()
-        val comments = state.comments.ifBlank { "sem comentários adicionais" }
-
-        return """
-            Você é um especialista em turismo e deve criar um roteiro prático e objetivo em português do Brasil.
-
-            Dados da viagem:
-            - Destino: ${state.destination.trim()}
-            - Tipo: ${state.type.label}
-            - Período: $start até $end
-            - Orçamento: R$ ${state.budget.replace(',', '.')}
-            - Comentários: $comments
-
-            Regras:
-            - Organize a resposta por dias.
-            - Sugira atividades de manhã, tarde e noite quando fizer sentido.
-            - Considere o orçamento informado.
-            - Finalize com dicas rápidas e úteis.
-        """.trimIndent()
-    }
 
     private fun validate(): Boolean {
         val state = _uiState.value
@@ -231,8 +238,13 @@ class TripFormViewModel(
             )
         }
 
-        if (state.destination.isBlank()) {
-            _uiState.update { it.copy(destinationError = "Destino é obrigatório") }
+        val hasInitialDestination = state.destination.isNotBlank()
+        val hasFinalDestination = state.finalDestination.isNotBlank()
+        if (!hasInitialDestination || !hasFinalDestination) {
+            _uiState.update { it.copy(destinationError = "Informe destino inicial e destino final") }
+            isValid = false
+        } else if (state.destination.trim().equals(state.finalDestination.trim(), ignoreCase = true)) {
+            _uiState.update { it.copy(destinationError = "Destino inicial e final devem ser diferentes") }
             isValid = false
         }
 

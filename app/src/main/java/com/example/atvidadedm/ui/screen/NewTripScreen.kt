@@ -62,7 +62,7 @@ fun NewTripScreen(
         factory = remember(currentUserId, tripId) {
             TripFormViewModelFactory(
                 tripRepository = application.tripRepository,
-                geminiRepository = application.geminiRepository,
+                tripDestinationRepository = application.tripDestinationRepository,
                 userId = currentUserId,
                 tripId = tripId
             )
@@ -123,7 +123,7 @@ fun NewTripScreen(
                 OutlinedTextField(
                     value = uiState.destination,
                     onValueChange = viewModel::onDestinationChange,
-                    label = { Text("Destino") },
+                    label = { Text("Destino inicial") },
                     modifier = Modifier.fillMaxWidth(),
                     isError = uiState.destinationError != null,
                     supportingText = uiState.destinationError?.let {
@@ -131,6 +131,19 @@ fun NewTripScreen(
                     },
                     singleLine = true
                 )
+
+                OutlinedTextField(
+                    value = uiState.finalDestination,
+                    onValueChange = viewModel::onFinalDestinationChange,
+                    label = { Text("Destino final") },
+                    modifier = Modifier.fillMaxWidth(),
+                    isError = uiState.destinationError != null,
+                    supportingText = uiState.destinationError?.let {
+                        { Text(it, color = MaterialTheme.colorScheme.error) }
+                    },
+                    singleLine = true
+                )
+
 
                 Text(
                     text = "Tipo da viagem",

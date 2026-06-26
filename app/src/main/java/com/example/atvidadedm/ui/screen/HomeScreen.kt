@@ -2,6 +2,7 @@ package com.example.atvidadedm.ui.screen
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Color
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -11,26 +12,40 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
@@ -42,20 +57,21 @@ import com.example.atvidadedm.data.local.UserEntity
 import com.example.atvidadedm.data.model.TripType
 import com.example.atvidadedm.ui.viewmodel.HomeViewModel
 import com.example.atvidadedm.ui.viewmodel.HomeViewModelFactory
+import com.example.atvidadedm.ui.viewmodel.MapDestinationPoint
+import com.example.atvidadedm.ui.viewmodel.RoutePathPoint
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polyline
 import java.text.NumberFormat
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private const val DEFAULT_MAP_LATITUDE = -14.235004
-private const val DEFAULT_MAP_LONGITUDE = -51.92528
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     currentUser: UserEntity,
@@ -63,13 +79,67 @@ fun HomeScreen(
     onOpenPhotos: (Long) -> Unit,
     onOpenPhotosFallback: () -> Unit
 ) {
+    val context = LocalContext.current
+    val app = context.applicationContext as TravelApplication
+    val viewModel: HomeViewModel = viewModel(
+        factory = HomeViewModelFactory(
+            tripRepository = app.tripRepository,
+            tripDestinationRepository = app.tripDestinationRepository,
+            locationRepository = app.locationRepository,
+            routeRepository = app.routeRepository,
+            userId = currentUser.id
+        )
+    )
+    val uiState by viewModel.uiState.collectAsState()
+    val activeTrip = uiState.activeTrip
+      val isCurrentDaySelection = uiState.selectedTripId == null
+    var isMapExpanded by remember { mutableStateOf(false) }
+    var isTripSelectorExpanded by remember { mutableStateOf(false) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        viewModel.onPermissionResult(granted)
+    }
+
+    LaunchedEffect(Unit) {
+        val fineGranted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        val coarseGranted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (fineGranted || coarseGranted) {
+            viewModel.onPermissionResult(true)
+        } else {
+            viewModel.refreshTripData()
+            viewModel.markPermissionRequested()
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
+    }
+
     Scaffold(
         bottomBar = {
             TripBottomBar(
                 selectedDestination = null,
-                showPhotoTab = true,
-                onOpenRoteiro = { onOpenPhotosFallback() },
-                onOpenPhotos = { onOpenPhotosFallback() }
+                enableRoteiroTab = activeTrip != null,
+                showPhotoTab = activeTrip != null,
+                onOpenRoteiro = {
+                    activeTrip?.let { onOpenRoteiro(it.id) } ?: onOpenPhotosFallback()
+                },
+                onOpenPhotos = {
+                    activeTrip?.let { onOpenPhotos(it.id) } ?: onOpenPhotosFallback()
+                }
             )
         }
     ) { innerPadding ->
@@ -88,39 +158,169 @@ fun HomeScreen(
                 color = MaterialTheme.colorScheme.primary
             )
             Text(
-                text = "Nesta tela o mapa é apenas visual, sem ações extras.",
+                    text = "O mapa OpenStreetMap aparece na tela inicial mostrando o destino final da viagem selecionada.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
 
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+            if (uiState.availableTrips.isNotEmpty()) {
+                ExposedDropdownMenuBox(
+                    expanded = isTripSelectorExpanded,
+                    onExpandedChange = { isTripSelectorExpanded = !isTripSelectorExpanded }
                 ) {
-                    Text("Mapa da viagem", style = MaterialTheme.typography.titleLarge)
-                    Text(
-                        text = "Visualização ilustrativa do mapa, sem atualização de localização ou botões de ação.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    val selectedTripLabel = activeTrip?.let {
+                        "${it.destination} (${formatTripPeriod(it.startDate, it.endDate)})"
+                    } ?: "Viagem atual do dia"
 
-                    OsmTripMapView(
-                        latitude = DEFAULT_MAP_LATITUDE,
-                        longitude = DEFAULT_MAP_LONGITUDE,
-                        destination = "Mapa ilustrativo",
+                    OutlinedTextField(
+                        value = selectedTripLabel,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Selecionar viagem") },
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = isTripSelectorExpanded)
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(240.dp)
+                            .menuAnchor()
                     )
+
+                    ExposedDropdownMenu(
+                        expanded = isTripSelectorExpanded,
+                        onDismissRequest = { isTripSelectorExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Viagem atual do dia") },
+                            onClick = {
+                                isTripSelectorExpanded = false
+                                viewModel.onTripSelectionChange(null)
+                            }
+                        )
+
+                        uiState.availableTrips.forEach { trip ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text("${trip.destination} (${formatTripPeriod(trip.startDate, trip.endDate)})")
+                                },
+                                onClick = {
+                                    isTripSelectorExpanded = false
+                                    viewModel.onTripSelectionChange(trip.id)
+                                }
+                            )
+                        }
+                    }
                 }
+            }
+
+            if (uiState.isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+
+                  if (activeTrip != null) {
+                ActiveTripCard(activeTrip)
+                ItineraryPreviewCard(
+                    itinerary = activeTrip.itinerary,
+                    onOpenRoteiro = { onOpenRoteiro(activeTrip.id) }
+                )
+                CurrentTripMapCard(
+                    trip = activeTrip,
+                    currentCity = uiState.currentCity,
+                    latitude = uiState.mapLatitude,
+                    longitude = uiState.mapLongitude,
+                    isMapLoading = uiState.isMapLoading,
+                    mapLabel = uiState.mapDestinationLabel,
+                    mapPoints = uiState.mapPoints,
+                    routePath = uiState.routePath,
+                    tripDestinations = uiState.tripDestinations,
+                    onExpandMap = { isMapExpanded = true }
+                )
+                          } else if (isCurrentDaySelection) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                                        Text("Sem viagens no dia", style = MaterialTheme.typography.titleLarge)
+                        Text(
+                                          text = "Nenhuma viagem foi encontrada para hoje.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                                        Button(onClick = { viewModel.refreshTripData() }) {
+                            Text("Atualizar")
+                        }
+                    }
+                }
+            }
+
+            uiState.message?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+
+    if (isMapExpanded) {
+        ExpandedMapDialog(
+            latitude = uiState.mapLatitude,
+            longitude = uiState.mapLongitude,
+            destination = uiState.mapDestinationLabel ?: activeTrip?.destination ?: "Viagem atual",
+            mapPoints = uiState.mapPoints,
+            routePath = uiState.routePath,
+            onDismiss = { isMapExpanded = false }
+        )
+    }
+}
+
+@Composable
+private fun ItineraryPreviewCard(
+    itinerary: String?,
+    onOpenRoteiro: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text("Roteiro da viagem", style = MaterialTheme.typography.titleLarge)
+            Text(
+                text = if (itinerary.isNullOrBlank()) {
+                    "Roteiro ainda não gerado. Toque em 'Abrir roteiro' para gerar pela IA."
+                } else {
+                    itinerary.take(220) + if (itinerary.length > 220) "..." else ""
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Button(
+                onClick = onOpenRoteiro,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Abrir roteiro")
             }
         }
     }
@@ -131,7 +331,13 @@ private fun CurrentTripMapCard(
     trip: TripEntity?,
     currentCity: String?,
     latitude: Double?,
-    longitude: Double?
+    longitude: Double?,
+    isMapLoading: Boolean,
+    mapLabel: String?,
+    mapPoints: List<MapDestinationPoint>,
+    routePath: List<RoutePathPoint>,
+    tripDestinations: List<String>,
+    onExpandMap: () -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -144,10 +350,10 @@ private fun CurrentTripMapCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Mapa da viagem atual", style = MaterialTheme.typography.titleLarge)
+            Text("Mapa da viagem", style = MaterialTheme.typography.titleLarge)
             Text(
                 text = when {
-                    trip != null -> "Local atual da viagem para ${trip.destination}"
+                    trip != null -> "Visualizando a viagem com destino final em ${trip.destination}"
                     !currentCity.isNullOrBlank() -> "Localização atual em $currentCity"
                     else -> "Aguardando localização atual"
                 },
@@ -155,22 +361,60 @@ private fun CurrentTripMapCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            if (latitude == null || longitude == null) {
+            if (tripDestinations.isNotEmpty()) {
+        val finalDestination = tripDestinations.lastOrNull().orEmpty()
                 Text(
-                    text = "A localização ainda não foi carregada. O mapa será exibido com uma posição padrão até a atualização.",
+          text = "Destino final: $finalDestination",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            OsmTripMapView(
-                latitude = latitude ?: DEFAULT_MAP_LATITUDE,
-                longitude = longitude ?: DEFAULT_MAP_LONGITUDE,
-                destination = trip?.destination ?: currentCity ?: "Localização atual",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(240.dp)
-            )
+            if (latitude == null || longitude == null) {
+                if (isMapLoading) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        Text(
+                            text = if (trip != null) {
+                                "Carregando mapa e trajeto da viagem..."
+                            } else {
+                                "Obtendo localização atual para exibir o mapa..."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "Ainda não foi possível localizar o trajeto. O mapa aparecerá assim que as coordenadas forem resolvidas.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                OsmTripMapView(
+                    latitude = latitude,
+                    longitude = longitude,
+                    destination = mapLabel ?: trip?.destination ?: currentCity ?: "Localização atual",
+                    mapPoints = mapPoints,
+                    routePath = routePath,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(240.dp)
+                )
+
+                Button(
+                    onClick = onExpandMap,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Expandir mapa")
+                }
+            }
         }
     }
 }
@@ -208,11 +452,57 @@ private fun ActiveTripCard(trip: TripEntity) {
 }
 
 @Composable
+private fun ExpandedMapDialog(
+    latitude: Double?,
+    longitude: Double?,
+    destination: String,
+    mapPoints: List<MapDestinationPoint>,
+    routePath: List<RoutePathPoint>,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (latitude != null && longitude != null) {
+                OsmTripMapView(
+                    latitude = latitude,
+                    longitude = longitude,
+                    destination = destination,
+                    mapPoints = mapPoints,
+                    routePath = routePath,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Sem coordenadas para exibir o mapa.")
+                }
+            }
+
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Fechar mapa"
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun OsmTripMapView(
     latitude: Double,
     longitude: Double,
     destination: String,
-    modifier: Modifier = Modifier
+    mapPoints: List<MapDestinationPoint> = emptyList(),
+    modifier: Modifier = Modifier,
+    routePath: List<RoutePathPoint> = emptyList()
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -253,17 +543,53 @@ private fun OsmTripMapView(
         }
     }
 
-    LaunchedEffect(latitude, longitude, destination) {
+    LaunchedEffect(latitude, longitude, destination, mapPoints, routePath) {
         val geoPoint = GeoPoint(latitude, longitude)
         mapView.controller.setZoom(13.0)
         mapView.controller.setCenter(geoPoint)
         mapView.overlays.clear()
 
-        val marker = Marker(mapView)
-        marker.position = geoPoint
-        marker.title = destination
-        marker.snippet = "Localização atual da viagem"
-        mapView.overlays.add(marker)
+        if (mapPoints.isNotEmpty()) {
+            mapPoints.forEachIndexed { index, point ->
+                val marker = Marker(mapView)
+                marker.position = GeoPoint(point.latitude, point.longitude)
+                marker.title = when {
+                    index == 0 -> "Inicio: ${point.name}"
+                    point.isFinal -> "Destino final: ${point.name}"
+                    else -> "Parada ${index + 1}: ${point.name}"
+                }
+                marker.snippet = when {
+                    index == 0 -> "Ponto inicial da viagem"
+                    point.isFinal -> "Chegada da viagem"
+                    else -> "Ponto intermediario"
+                }
+                mapView.overlays.add(marker)
+            }
+
+            val routeGeoPoints = if (routePath.isNotEmpty()) {
+                routePath.map { GeoPoint(it.latitude, it.longitude) }
+            } else {
+                mapPoints.map { GeoPoint(it.latitude, it.longitude) }
+            }
+
+            if (routeGeoPoints.size > 1) {
+                val polyline = Polyline().apply {
+                    outlinePaint.color = Color.BLUE
+                    outlinePaint.strokeWidth = 6f
+                    setPoints(routeGeoPoints)
+                }
+                mapView.overlays.add(polyline)
+            }
+
+            val centerPoint = mapPoints.firstOrNull { it.isFinal } ?: mapPoints.last()
+            mapView.controller.setCenter(GeoPoint(centerPoint.latitude, centerPoint.longitude))
+        } else {
+            val marker = Marker(mapView)
+            marker.position = geoPoint
+            marker.title = destination
+            marker.snippet = "Localizacao atual da viagem"
+            mapView.overlays.add(marker)
+        }
         mapView.invalidate()
     }
 
@@ -282,3 +608,9 @@ private fun formatDate(
         .toLocalDate()
         .format(formatter)
 }
+
+private fun formatTripPeriod(startMillis: Long, endMillis: Long): String {
+    val formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.Builder().setLanguage("pt").setRegion("BR").build())
+    return "${formatDate(startMillis, formatter)} até ${formatDate(endMillis, formatter)}"
+}
+

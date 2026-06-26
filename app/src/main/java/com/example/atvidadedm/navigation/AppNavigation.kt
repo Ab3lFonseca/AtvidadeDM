@@ -12,11 +12,17 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.atvidadedm.ui.screen.ForgotPasswordScreen
 import com.example.atvidadedm.ui.screen.LoginScreen
+import com.example.atvidadedm.ui.screen.HomeScreen
+import com.example.atvidadedm.ui.screen.MyTripsScreen
 import com.example.atvidadedm.ui.screen.MenuScreen
+import com.example.atvidadedm.ui.screen.RoteiroScreen
+import com.example.atvidadedm.ui.screen.TripPhotosScreen
 import com.example.atvidadedm.ui.screen.RegisterScreen
 import com.example.atvidadedm.ui.viewmodel.SessionViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
+import androidx.navigation.NavType
 import androidx.navigation.compose.rememberNavController
 
 @Composable
@@ -90,6 +96,49 @@ fun AppNavigation() {
                             }
                         }
                     }
+                )
+            }
+        }
+
+        composable(
+            route = AppRoutes.ROUTEIRO_PATTERN,
+            arguments = listOf(navArgument("tripId") { type = NavType.LongType })
+        ) { entry ->
+            val currentUser = sessionUiState.currentUser
+            val tripId = entry.arguments?.getLong("tripId") ?: 0L
+            if (currentUser == null) {
+                LaunchedEffect(Unit) {
+                    navController.navigate(AppRoutes.LOGIN) {
+                        popUpTo(AppRoutes.ROUTEIRO_PATTERN) { inclusive = true }
+                    }
+                }
+            } else {
+                RoteiroScreen(
+                    currentUserId = currentUser.id,
+                    tripId = tripId,
+                    onOpenRoteiro = { navController.navigate(AppRoutes.roteiro(it)) },
+                    onOpenPhotos = { navController.navigate(AppRoutes.tripPhotos(it)) }
+                )
+            }
+        }
+
+        composable(
+            route = AppRoutes.TRIP_PHOTOS_PATTERN,
+            arguments = listOf(navArgument("tripId") { type = NavType.LongType })
+        ) { entry ->
+            val currentUser = sessionUiState.currentUser
+            val tripId = entry.arguments?.getLong("tripId") ?: 0L
+            if (currentUser == null) {
+                LaunchedEffect(Unit) {
+                    navController.navigate(AppRoutes.LOGIN) {
+                        popUpTo(AppRoutes.TRIP_PHOTOS_PATTERN) { inclusive = true }
+                    }
+                }
+            } else {
+                TripPhotosScreen(
+                    tripId = tripId,
+                    onOpenRoteiro = { navController.navigate(AppRoutes.roteiro(it)) },
+                    onOpenPhotos = { }
                 )
             }
         }

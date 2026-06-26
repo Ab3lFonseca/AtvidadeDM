@@ -4,33 +4,67 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.atvidadedm.data.LocationLookupResult
 import com.example.atvidadedm.data.LocationRepository
+import com.example.atvidadedm.data.DestinationCoordinates
+import com.example.atvidadedm.data.RouteRepository
+import com.example.atvidadedm.data.TripDestinationRepository
 import com.example.atvidadedm.data.TripRepository
 import com.example.atvidadedm.data.local.TripEntity
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
+import java.time.Instant
+import java.time.ZoneOffset
 
 data class HomeUiState(
 	val isLoading: Boolean = false,
 	val permissionGranted: Boolean = false,
 	val permissionRequested: Boolean = false,
+	val availableTrips: List<TripEntity> = emptyList(),
+	val selectedTripId: Long? = null,
 	val currentCity: String? = null,
 	val currentLatitude: Double? = null,
 	val currentLongitude: Double? = null,
+	val mapLatitude: Double? = null,
+	val mapLongitude: Double? = null,
+	val isMapLoading: Boolean = false,
+	val mapDestinationLabel: String? = null,
+	val mapPoints: List<MapDestinationPoint> = emptyList(),
+	val routePath: List<RoutePathPoint> = emptyList(),
+	val tripDestinations: List<String> = emptyList(),
 	val activeTrip: TripEntity? = null,
 	val message: String? = null
 )
 
+data class MapDestinationPoint(
+	val name: String,
+	val latitude: Double,
+	val longitude: Double,
+	val isFinal: Boolean
+)
+
+data class RoutePathPoint(
+	val latitude: Double,
+	val longitude: Double
+)
+
 class HomeViewModel(
 	private val tripRepository: TripRepository,
+	private val tripDestinationRepository: TripDestinationRepository,
 	private val locationRepository: LocationRepository,
+	private val routeRepository: RouteRepository,
 	private val userId: Long
 ) : ViewModel() {
 
 	private val _uiState = MutableStateFlow(HomeUiState())
 	val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+
+	init {
+		observeTrips()
+	}
 
 	fun markPermissionRequested() {
 		_uiState.update { it.copy(permissionRequested = true) }
@@ -42,7 +76,7 @@ class HomeViewModel(
 				isLoading = false,
 				permissionGranted = granted,
 				permissionRequested = true,
-				message = if (granted) null else "Permissao de localizacao negada."
+				message = null
 			)
 		}
 
@@ -51,76 +85,269 @@ class HomeViewModel(
 		}
 	}
 
+	fun refreshTripData() {
+		loadPreferredTrip()
+	}
+
+	fun onTripSelectionChange(tripId: Long?) {
+		_uiState.update { it.copy(selectedTripId = tripId, message = null) }
+		loadPreferredTrip()
+	}
+
 	fun refreshCurrentTripFromLocation() {
+		loadPreferredTrip()
+
 		if (!_uiState.value.permissionGranted) {
-			loadCurrentTripFallback()
 			return
 		}
 
 		viewModelScope.launch {
-			_uiState.update { it.copy(isLoading = true, message = null) }
-
 			val result = try {
 				locationRepository.getCurrentCity()
 			} catch (t: Throwable) {
-				// Em caso de erro inesperado, tenta o fallback por data e registra mensagem
-				loadCurrentTripFallback(message = "Erro ao obter localizacao: ${t.message}")
+				_uiState.update {
+					it.copy(message = "Erro ao obter localizacao: ${t.message}")
+				}
 				return@launch
 			}
 
 			when (result) {
 				is LocationLookupResult.Success -> {
-					val now = System.currentTimeMillis()
-					val trip = result.city?.let { city ->
-						tripRepository.getActiveTripByCityAndDate(
-							userId = userId,
-							city = city,
-							currentDate = now
-						)
-					} ?: tripRepository.getActiveTripByDate(userId = userId, currentDate = now)
-
 					_uiState.update {
 						it.copy(
-							isLoading = false,
 							currentCity = result.city,
 							currentLatitude = result.latitude,
 							currentLongitude = result.longitude,
-							activeTrip = trip,
-							message = if (trip == null) {
-								"Nenhuma viagem em andamento para ${result.city}."
+							mapLatitude = if (it.activeTrip == null) {
+								it.mapLatitude ?: result.latitude
 							} else {
-								null
-							}
+								it.mapLatitude
+							},
+							mapLongitude = if (it.activeTrip == null) {
+								it.mapLongitude ?: result.longitude
+							} else {
+								it.mapLongitude
+							},
+							mapDestinationLabel = if (it.activeTrip == null) {
+								it.mapDestinationLabel ?: result.city ?: "Localização atual"
+							} else {
+								it.mapDestinationLabel
+							},
+							message = null
 						)
 					}
 				}
 
 				LocationLookupResult.PermissionDenied -> {
-					loadCurrentTripFallback(message = "Permissao de localizacao nao concedida.")
+					_uiState.update {
+						it.copy(message = "Permissao de localizacao nao concedida.")
+					}
 				}
 
 				LocationLookupResult.LocationUnavailable -> {
-					loadCurrentTripFallback(message = "Nao foi possivel obter a localizacao atual.")
+					_uiState.update {
+						it.copy(message = "Nao foi possivel obter a localizacao atual.")
+					}
 				}
 			}
 		}
 	}
 
-	private fun loadCurrentTripFallback(message: String? = null) {
+	private fun observeTrips() {
 		viewModelScope.launch {
-			val now = System.currentTimeMillis()
+			tripRepository.getTripsByUserId(userId).collect { trips ->
+				val currentSelectedId = _uiState.value.selectedTripId
+				_uiState.update { it.copy(availableTrips = trips) }
+
+				if (currentSelectedId != null && trips.none { it.id == currentSelectedId }) {
+					_uiState.update {
+						it.copy(
+							selectedTripId = null,
+							message = "A viagem selecionada não está mais disponível."
+						)
+					}
+					loadCurrentTripByDate()
+				}
+			}
+		}
+	}
+
+	private fun loadPreferredTrip() {
+		val selectedTripId = _uiState.value.selectedTripId
+		if (selectedTripId != null) {
+			loadTripById(selectedTripId)
+		} else {
+			loadCurrentTripByDate()
+		}
+	}
+
+	private fun loadTripById(tripId: Long) {
+		viewModelScope.launch {
+			_uiState.update { it.copy(isLoading = true, message = null) }
+			val trip = tripRepository.getTripById(tripId)?.takeIf { it.userId == userId }
+			_uiState.update {
+				it.copy(
+					isLoading = false,
+					mapLatitude = null,
+					mapLongitude = null,
+					isMapLoading = false,
+					mapDestinationLabel = trip?.destination,
+					mapPoints = emptyList(),
+					routePath = emptyList(),
+					tripDestinations = emptyList(),
+					activeTrip = trip,
+					message = if (trip == null) "Viagem selecionada não encontrada." else null
+				)
+			}
+
+			if (trip != null) {
+				enrichMapWithTripDestinations(trip)
+			}
+		}
+	}
+
+	private fun loadCurrentTripByDate(message: String? = null) {
+		viewModelScope.launch {
+			_uiState.update { it.copy(isLoading = true, message = null) }
+			val now = currentUtcDateStartMillis()
 			val trip = tripRepository.getActiveTripByDate(userId = userId, currentDate = now)
 			_uiState.update {
 				it.copy(
 					isLoading = false,
-					activeTrip = trip,
-					message = message ?: if (trip == null) {
-						"Nenhuma viagem em andamento foi encontrada."
-					} else {
+					mapLatitude = null,
+					mapLongitude = null,
+					isMapLoading = false,
+					mapDestinationLabel = if (trip == null) {
 						null
+					} else {
+						trip.destination
+					},
+					mapPoints = emptyList(),
+					routePath = emptyList(),
+					tripDestinations = emptyList(),
+					activeTrip = trip,
+					message = message
+				)
+			}
+
+			if (trip != null) {
+				enrichMapWithTripDestinations(trip)
+			}
+		}
+	}
+
+	private fun enrichMapWithTripDestinations(trip: TripEntity) {
+		viewModelScope.launch {
+			val tripDestinations = tripDestinationRepository.getTripDestinations(trip.id)
+			val orderedDestinations = tripDestinations
+				.sortedBy { it.orderIndex }
+				.map { it.name.trim() }
+				.filter { it.isNotBlank() }
+				.distinct()
+
+			val finalDestination = trip.destination.trim().ifBlank {
+				orderedDestinations.lastOrNull().orEmpty()
+			}
+
+			val effectiveDestinations = listOfNotNull(finalDestination.ifBlank { null })
+
+			if (!isTripStillActive(trip.id)) {
+				return@launch
+			}
+
+			_uiState.update {
+				it.copy(
+					isMapLoading = true,
+					mapDestinationLabel = finalDestination.ifBlank { trip.destination },
+					tripDestinations = effectiveDestinations,
+					mapPoints = emptyList(),
+					routePath = emptyList()
+				)
+			}
+
+			val points = supervisorScope {
+				val finalCoordinatesDeferred = async {
+					if (finalDestination.isBlank()) null else resolveTripCoordinates(finalDestination)
+				}
+
+				val finalCoordinates = finalCoordinatesDeferred.await()
+
+				if (finalCoordinates != null && isTripStillActive(trip.id)) {
+					_uiState.update {
+						it.copy(
+							mapLatitude = finalCoordinates.latitude,
+							mapLongitude = finalCoordinates.longitude,
+							mapDestinationLabel = finalDestination.ifBlank { trip.destination },
+							mapPoints = listOf(
+								MapDestinationPoint(
+									name = finalDestination,
+									latitude = finalCoordinates.latitude,
+									longitude = finalCoordinates.longitude,
+									isFinal = true
+								)
+							)
+						)
 					}
+				}
+
+				listOfNotNull(
+					finalCoordinates?.let {
+						MapDestinationPoint(
+							name = finalDestination,
+							latitude = it.latitude,
+							longitude = it.longitude,
+							isFinal = true
+						)
+					}
+				).ifEmpty {
+					val fallbackCoordinates = resolveTripCoordinates(trip.destination)
+					if (fallbackCoordinates != null) {
+						listOf(
+							MapDestinationPoint(
+								name = trip.destination,
+								latitude = fallbackCoordinates.latitude,
+								longitude = fallbackCoordinates.longitude,
+								isFinal = true
+							)
+						)
+					} else {
+						emptyList()
+					}
+				}
+			}
+
+			if (!isTripStillActive(trip.id)) {
+				return@launch
+			}
+
+			val centerPoint = points.firstOrNull { it.isFinal } ?: points.firstOrNull()
+			_uiState.update {
+				it.copy(
+					mapLatitude = centerPoint?.latitude,
+					mapLongitude = centerPoint?.longitude,
+					mapDestinationLabel = centerPoint?.name ?: trip.destination,
+					mapPoints = points,
+					routePath = emptyList(),
+					tripDestinations = effectiveDestinations,
+					isMapLoading = false
 				)
 			}
 		}
+	}
+
+	private suspend fun resolveTripCoordinates(destination: String) =
+		locationRepository.getCoordinatesForDestination(destination)
+
+	private fun isTripStillActive(tripId: Long): Boolean {
+		return _uiState.value.activeTrip?.id == tripId
+	}
+
+	private fun currentUtcDateStartMillis(): Long {
+		return Instant.now()
+			.atZone(ZoneOffset.UTC)
+			.toLocalDate()
+			.atStartOfDay(ZoneOffset.UTC)
+			.toInstant()
+			.toEpochMilli()
 	}
 }

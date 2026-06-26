@@ -19,6 +19,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -162,6 +163,7 @@ private fun TripDismissItem(
     ) {
         TripCard(
             trip = trip,
+            onDelete = onDelete,
             onEdit = onEdit,
             onOpenRoteiro = onOpenRoteiro,
             onOpenPhotos = onOpenPhotos
@@ -208,6 +210,7 @@ private fun DeleteBackground(
 @Composable
 private fun TripCard(
     trip: TripEntity,
+    onDelete: () -> Unit,
     onEdit: () -> Unit,
     onOpenRoteiro: () -> Unit,
     onOpenPhotos: () -> Unit
@@ -275,6 +278,13 @@ private fun TripCard(
                     }
                     androidx.compose.material3.TextButton(onClick = onOpenPhotos) {
                         Text("Fotos")
+                    }
+                    IconButton(onClick = onDelete) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Excluir viagem",
+                            tint = Color.Red
+                        )
                     }
                 }
             }

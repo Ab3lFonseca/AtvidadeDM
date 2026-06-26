@@ -56,24 +56,33 @@ class LoginViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
 
-            when (val result = userRepository.authenticateUser(state.email, state.password)) {
-                is LoginResult.Success -> {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            loggedUser = result.user,
-                            feedbackMessage = "Login realizado com sucesso!"
-                        )
+            try {
+                when (val result = userRepository.authenticateUser(state.email, state.password)) {
+                    is LoginResult.Success -> {
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                loggedUser = result.user,
+                                feedbackMessage = "Login realizado com sucesso!"
+                            )
+                        }
+                    }
+
+                    LoginResult.InvalidCredentials -> {
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                feedbackMessage = "E-mail ou senha inválidos"
+                            )
+                        }
                     }
                 }
-
-                LoginResult.InvalidCredentials -> {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            feedbackMessage = "E-mail ou senha inválidos"
-                        )
-                    }
+            } catch (throwable: Throwable) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        feedbackMessage = throwable.message ?: "Não foi possível entrar no momento."
+                    )
                 }
             }
         }

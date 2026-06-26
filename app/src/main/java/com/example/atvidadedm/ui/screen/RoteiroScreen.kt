@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Card
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -26,9 +27,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -58,6 +57,7 @@ fun RoteiroScreen(
         factory = remember(currentUserId, tripId) {
             RoteiroViewModelFactory(
                 tripRepository = application.tripRepository,
+                tripDestinationRepository = application.tripDestinationRepository,
                 geminiRepository = application.geminiRepository,
                 userId = currentUserId,
                 tripId = tripId.takeIf { it > 0 }
@@ -65,8 +65,6 @@ fun RoteiroScreen(
         }
     )
     val uiState by viewModel.uiState.collectAsState()
-    var showStartDatePicker by remember { mutableStateOf(false) }
-    var showEndDatePicker by remember { mutableStateOf(false) }
     val formatter = remember {
         DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.Builder().setLanguage("pt").setRegion("BR").build())
     }
@@ -95,7 +93,7 @@ fun RoteiroScreen(
                 color = MaterialTheme.colorScheme.primary
             )
             Text(
-                text = "O roteiro é gerado automaticamente ao cadastrar uma nova viagem e fica salvo aqui.",
+                text = "Esta tela é dedicada ao roteiro da viagem. Gere um texto prático com ajuda da IA e mantenha tudo centralizado aqui.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -135,13 +133,8 @@ fun RoteiroScreen(
                         color = MaterialTheme.colorScheme.primary
                     )
 
-                    OutlinedTextField(
-                        value = uiState.destination,
-                        onValueChange = viewModel::onDestinationChange,
-                        label = { Text("Destino") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
+                    Text(text = "Destino inicial: ${uiState.initialDestination.ifBlank { uiState.destination.ifBlank { "não informado" } }}")
+                    Text(text = "Destino final: ${uiState.finalDestination.ifBlank { uiState.destination.ifBlank { "não informado" } }}")
 
                     Text(
                         text = "Tipo da viagem",
@@ -164,9 +157,7 @@ fun RoteiroScreen(
                     OutlinedTextField(
                         value = uiState.startDate?.let { formatDate(it, formatter) } ?: "",
                         onValueChange = {},
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { showStartDatePicker = true },
+                        modifier = Modifier.fillMaxWidth(),
                         readOnly = true,
                         label = { Text("Data início") },
                         placeholder = { Text("Selecione a data") }
@@ -175,9 +166,7 @@ fun RoteiroScreen(
                     OutlinedTextField(
                         value = uiState.endDate?.let { formatDate(it, formatter) } ?: "",
                         onValueChange = {},
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { showEndDatePicker = true },
+                        modifier = Modifier.fillMaxWidth(),
                         readOnly = true,
                         label = { Text("Data fim") },
                         placeholder = { Text("Selecione a data") }
@@ -222,26 +211,34 @@ fun RoteiroScreen(
                     )
 
                     Text(
-                        text = "Nenhuma ação disponível nesta tela. O roteiro é gerado ao salvar uma nova viagem.",
+                        text = "Gere um roteiro por IA em texto com atividades para seguir durante a viagem.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+
+                    Button(
+                        onClick = viewModel::generateItinerary,
+                        enabled = !uiState.isGenerating,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (uiState.isGenerating) "Gerando roteiro..." else "Gerar roteiro com IA")
+                    }
                 }
             }
 
-            if (!uiState.itinerary.isNullOrBlank()) {
-                Card {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Text(
-                            text = "Roteiro gerado",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+            Card {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Roteiro em texto",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    if (!uiState.itinerary.isNullOrBlank()) {
                         SelectionContainer {
                             Text(
                                 text = uiState.itinerary.orEmpty(),
@@ -249,15 +246,12 @@ fun RoteiroScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                         }
+                    } else {
+                        Text(
+                            text = "Nenhum roteiro foi gerado ainda. Use o botão abaixo para criar a versão em texto.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                }
-            } else {
-                Card {
-                    Text(
-                        text = "Este roteiro ainda não foi gerado. Crie uma nova viagem para recebê-lo automaticamente.",
-                        modifier = Modifier.padding(16.dp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
             }
 
@@ -265,57 +259,6 @@ fun RoteiroScreen(
         }
     }
 
-    if (showStartDatePicker) {
-        val datePickerState = androidx.compose.material3.rememberDatePickerState(
-            initialSelectedDateMillis = uiState.startDate
-        )
-        DatePickerDialog(
-            onDismissRequest = { showStartDatePicker = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        datePickerState.selectedDateMillis?.let(viewModel::onStartDateSelected)
-                        showStartDatePicker = false
-                    }
-                ) {
-                    Text("OK")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showStartDatePicker = false }) {
-                    Text("Cancelar")
-                }
-            }
-        ) {
-            DatePicker(state = datePickerState)
-        }
-    }
-
-    if (showEndDatePicker) {
-        val datePickerState = androidx.compose.material3.rememberDatePickerState(
-            initialSelectedDateMillis = uiState.endDate
-        )
-        DatePickerDialog(
-            onDismissRequest = { showEndDatePicker = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        datePickerState.selectedDateMillis?.let(viewModel::onEndDateSelected)
-                        showEndDatePicker = false
-                    }
-                ) {
-                    Text("OK")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showEndDatePicker = false }) {
-                    Text("Cancelar")
-                }
-            }
-        ) {
-            DatePicker(state = datePickerState)
-        }
-    }
 }
 
 private fun formatDate(

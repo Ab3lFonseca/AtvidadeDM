@@ -84,6 +84,10 @@ class TripRepository(
     suspend fun deleteTrip(tripId: Long) {
         tripDao.deleteById(tripId)
     }
+
+    suspend fun updateItinerary(tripId: Long, itinerary: String) {
+        tripDao.updateItinerary(tripId = tripId, itinerary = itinerary.trim())
+    }
 }
 
 sealed interface TripSaveResult {

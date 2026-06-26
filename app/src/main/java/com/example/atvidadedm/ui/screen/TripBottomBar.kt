@@ -17,6 +17,7 @@ public enum class TripBottomBarDestination {
 @Composable
 fun TripBottomBar(
     selectedDestination: TripBottomBarDestination? = null,
+    enableRoteiroTab: Boolean = true,
     showPhotoTab: Boolean,
     onOpenRoteiro: () -> Unit,
     onOpenPhotos: () -> Unit
@@ -24,6 +25,7 @@ fun TripBottomBar(
     NavigationBar {
         NavigationBarItem(
             selected = selectedDestination == TripBottomBarDestination.ROUTEIRO,
+            enabled = enableRoteiroTab,
             onClick = onOpenRoteiro,
             icon = {
                 Icon(
