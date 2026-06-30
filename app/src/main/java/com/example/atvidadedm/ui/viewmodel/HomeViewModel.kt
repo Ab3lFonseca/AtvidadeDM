@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.atvidadedm.data.LocationLookupResult
 import com.example.atvidadedm.data.LocationRepository
 import com.example.atvidadedm.data.DestinationCoordinates
-import com.example.atvidadedm.data.RouteRepository
 import com.example.atvidadedm.data.TripDestinationRepository
 import com.example.atvidadedm.data.TripRepository
 import com.example.atvidadedm.data.local.TripEntity
@@ -16,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
 import java.time.ZoneOffset
 
@@ -33,7 +33,6 @@ data class HomeUiState(
 	val isMapLoading: Boolean = false,
 	val mapDestinationLabel: String? = null,
 	val mapPoints: List<MapDestinationPoint> = emptyList(),
-	val routePath: List<RoutePathPoint> = emptyList(),
 	val tripDestinations: List<String> = emptyList(),
 	val activeTrip: TripEntity? = null,
 	val message: String? = null
@@ -46,16 +45,10 @@ data class MapDestinationPoint(
 	val isFinal: Boolean
 )
 
-data class RoutePathPoint(
-	val latitude: Double,
-	val longitude: Double
-)
-
 class HomeViewModel(
 	private val tripRepository: TripRepository,
 	private val tripDestinationRepository: TripDestinationRepository,
 	private val locationRepository: LocationRepository,
-	private val routeRepository: RouteRepository,
 	private val userId: Long
 ) : ViewModel() {
 
@@ -183,19 +176,14 @@ class HomeViewModel(
 
 	private fun loadTripById(tripId: Long) {
 		viewModelScope.launch {
-			_uiState.update { it.copy(isLoading = true, message = null) }
+			_uiState.update { it.copy(isLoading = true) }
 			val trip = tripRepository.getTripById(tripId)?.takeIf { it.userId == userId }
+
 			_uiState.update {
 				it.copy(
 					isLoading = false,
-					mapLatitude = null,
-					mapLongitude = null,
-					isMapLoading = false,
-					mapDestinationLabel = trip?.destination,
-					mapPoints = emptyList(),
-					routePath = emptyList(),
-					tripDestinations = emptyList(),
 					activeTrip = trip,
+					isMapLoading = trip != null,
 					message = if (trip == null) "Viagem selecionada não encontrada." else null
 				)
 			}
@@ -223,7 +211,6 @@ class HomeViewModel(
 						trip.destination
 					},
 					mapPoints = emptyList(),
-					routePath = emptyList(),
 					tripDestinations = emptyList(),
 					activeTrip = trip,
 					message = message
@@ -260,77 +247,44 @@ class HomeViewModel(
 					isMapLoading = true,
 					mapDestinationLabel = finalDestination.ifBlank { trip.destination },
 					tripDestinations = effectiveDestinations,
-					mapPoints = emptyList(),
-					routePath = emptyList()
+					mapPoints = emptyList()
 				)
 			}
 
-			val points = supervisorScope {
-				val finalCoordinatesDeferred = async {
-					if (finalDestination.isBlank()) null else resolveTripCoordinates(finalDestination)
-				}
-
-				val finalCoordinates = finalCoordinatesDeferred.await()
-
-				if (finalCoordinates != null && isTripStillActive(trip.id)) {
-					_uiState.update {
-						it.copy(
-							mapLatitude = finalCoordinates.latitude,
-							mapLongitude = finalCoordinates.longitude,
-							mapDestinationLabel = finalDestination.ifBlank { trip.destination },
-							mapPoints = listOf(
-								MapDestinationPoint(
-									name = finalDestination,
-									latitude = finalCoordinates.latitude,
-									longitude = finalCoordinates.longitude,
-									isFinal = true
-								)
-							)
-						)
-					}
-				}
-
-				listOfNotNull(
-					finalCoordinates?.let {
-						MapDestinationPoint(
-							name = finalDestination,
-							latitude = it.latitude,
-							longitude = it.longitude,
-							isFinal = true
-						)
-					}
-				).ifEmpty {
-					val fallbackCoordinates = resolveTripCoordinates(trip.destination)
-					if (fallbackCoordinates != null) {
-						listOf(
-							MapDestinationPoint(
-								name = trip.destination,
-								latitude = fallbackCoordinates.latitude,
-								longitude = fallbackCoordinates.longitude,
-								isFinal = true
-							)
-						)
-					} else {
-						emptyList()
-					}
-				}
-			}
+			val coords = resolveTripCoordinates(finalDestination)
 
 			if (!isTripStillActive(trip.id)) {
 				return@launch
 			}
 
-			val centerPoint = points.firstOrNull { it.isFinal } ?: points.firstOrNull()
-			_uiState.update {
-				it.copy(
-					mapLatitude = centerPoint?.latitude,
-					mapLongitude = centerPoint?.longitude,
-					mapDestinationLabel = centerPoint?.name ?: trip.destination,
-					mapPoints = points,
-					routePath = emptyList(),
-					tripDestinations = effectiveDestinations,
-					isMapLoading = false
-				)
+			if (coords != null) {
+				_uiState.update {
+					it.copy(
+						mapLatitude = coords.latitude,
+						mapLongitude = coords.longitude,
+						mapDestinationLabel = finalDestination,
+						mapPoints = listOf(
+							MapDestinationPoint(
+								name = finalDestination,
+								latitude = coords.latitude,
+								longitude = coords.longitude,
+								isFinal = true
+							)
+						),
+						isMapLoading = false
+					)
+				}
+			} else {
+				// Fallback to current location if destination is not found
+				_uiState.update {
+					it.copy(
+						mapLatitude = it.currentLatitude,
+						mapLongitude = it.currentLongitude,
+						mapDestinationLabel = it.currentCity ?: "Localização atual",
+						isMapLoading = false,
+						message = "Não foi possível localizar '${finalDestination}'. Mostrando sua posição atual."
+					)
+				}
 			}
 		}
 	}

@@ -93,10 +93,7 @@ class LocationRepository(
             return null
         }
 
-        val geocoder = Geocoder(
-            context,
-            Locale.Builder().setLanguage("pt").setRegion("BR").build()
-        )
+        val geocoder = Geocoder(context, Locale.getDefault())
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             withContext(Dispatchers.IO) {
@@ -135,33 +132,28 @@ class LocationRepository(
 
     suspend fun getCoordinatesForDestination(destination: String): DestinationCoordinates? {
         val query = destination.trim()
-        if (query.isBlank()) {
-            return null
-        }
+        if (query.isBlank()) return null
 
         destinationCoordinatesCache[query]?.let { return it }
 
-        val candidateQueries = buildQueryCandidates(query)
-        candidateQueries.forEach { candidate ->
+        val candidates = buildQueryCandidates(query)
+        for (candidate in candidates) {
             val resolved = supervisorScope {
-                val nominatimDeferred = async {
-                    withTimeoutOrNull(4_500L) {
-                        getCoordinatesFromNominatim(candidate)
-                    }
-                }
                 val geocoderDeferred = async {
                     if (Geocoder.isPresent()) {
-                        withTimeoutOrNull(2_500L) {
-                            getCoordinatesFromAndroidGeocoder(candidate)
-                        }
-                    } else {
-                        null
-                    }
+                        withTimeoutOrNull(4000L) { getCoordinatesFromAndroidGeocoder(candidate) }
+                    } else null
+                }
+                val nominatimDeferred = async {
+                    withTimeoutOrNull(7000L) { getCoordinatesFromNominatim(candidate) }
                 }
 
-                val geocoderResult = geocoderDeferred.await()
-                val nominatimResult = nominatimDeferred.await()
-                nominatimResult ?: geocoderResult
+                // Tenta Geocoder primeiro (mais rápido se funcionar)
+                val geoResult = try { geocoderDeferred.await() } catch (_: Exception) { null }
+                if (geoResult != null) return@supervisorScope geoResult
+
+                // Fallback para Nominatim
+                try { nominatimDeferred.await() } catch (_: Exception) { null }
             }
 
             if (resolved != null) {
@@ -170,9 +162,6 @@ class LocationRepository(
                 return resolved
             }
         }
-
-        destinationCoordinatesCache[query] = null
-        trimCacheIfNeeded()
         return null
     }
 
@@ -184,20 +173,23 @@ class LocationRepository(
             .replace("  ", " ")
             .trim()
 
-        return linkedSetOf(query, compact)
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .toList()
+        val list = mutableListOf<String>()
+        list.add(query)
+        if (compact != query && compact.isNotBlank()) {
+            list.add(compact)
+        }
+        return list.distinct()
     }
 
 
     private suspend fun getCoordinatesFromAndroidGeocoder(query: String): DestinationCoordinates? {
+        // Tenta com locale padrão, se falhar tenta US
+        return getCoordinatesFromAndroidGeocoderWithLocale(query, Locale.getDefault())
+            ?: getCoordinatesFromAndroidGeocoderWithLocale(query, Locale.US)
+    }
 
-        val geocoder = Geocoder(
-            context,
-            Locale.US
-        )
-
+    private suspend fun getCoordinatesFromAndroidGeocoderWithLocale(query: String, locale: Locale): DestinationCoordinates? {
+        val geocoder = Geocoder(context, locale)
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 withContext(Dispatchers.IO) {
@@ -229,70 +221,56 @@ class LocationRepository(
                     }
                 }
             }
-        } catch (_: IOException) {
+        } catch (_: Exception) {
             null
         }
     }
 
     private suspend fun getCoordinatesFromNominatim(query: String): DestinationCoordinates? {
         return withContext(Dispatchers.IO) {
+            var connection: HttpURLConnection? = null
             try {
                 val encoded = URLEncoder.encode(query, Charsets.UTF_8.name())
-                val url = URL(
-                    "https://nominatim.openstreetmap.org/search?q=$encoded&format=json&limit=1&addressdetails=1&accept-language=pt-BR"
-                )
-                val connection = (url.openConnection() as HttpURLConnection).apply {
+                // Usando um endpoint HTTPS estável e User-Agent genérico porém identificável
+                val url = URL("https://nominatim.openstreetmap.org/search?q=$encoded&format=json&limit=1")
+                connection = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "GET"
-                    connectTimeout = 10_000
-                    readTimeout = 10_000
-                    setRequestProperty("User-Agent", "AtvidadeDM/1.0 (android-app)")
+                    connectTimeout = 8000
+                    readTimeout = 8000
+                    setRequestProperty("User-Agent", "TravelAppAndroid/1.0")
+                    setRequestProperty("Accept", "application/json")
                 }
 
                 if (connection.responseCode !in 200..299) {
-                    connection.disconnect()
                     return@withContext null
                 }
 
                 connection.inputStream.bufferedReader().use { reader ->
                     val body = reader.readText()
                     val array = org.json.JSONArray(body)
-                    if (array.length() == 0) {
-                        return@withContext null
-                    }
+                    if (array.length() == 0) return@withContext null
 
                     val first = array.getJSONObject(0)
-                    val displayName = first.optString("display_name")
-                    val normalizedQuery = normalizeText(query)
-                    val normalizedDisplay = normalizeText(displayName)
-                    if (normalizedQuery.isNotBlank() && normalizedDisplay.isNotBlank() && !normalizedDisplay.contains(normalizedQuery)) {
-                        return@withContext null
-                    }
                     val latitude = first.optString("lat").toDoubleOrNull()
                     val longitude = first.optString("lon").toDoubleOrNull()
-                    if (latitude == null || longitude == null) {
-                        null
-                    } else {
+                    
+                    if (latitude != null && longitude != null) {
                         DestinationCoordinates(latitude = latitude, longitude = longitude)
+                    } else {
+                        null
                     }
                 }
             } catch (_: Exception) {
                 null
+            } finally {
+                connection?.disconnect()
             }
         }
     }
 
-    private fun normalizeText(value: String): String {
-        val lower = value.trim().lowercase(Locale.ROOT)
-        return java.text.Normalizer.normalize(lower, java.text.Normalizer.Form.NFD)
-            .replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
-            .replace("[^a-z0-9\\s]".toRegex(), " ")
-            .replace("\\s+".toRegex(), " ")
-            .trim()
-    }
-
     private fun trimCacheIfNeeded() {
-        while (destinationCoordinatesCache.size > 32) {
-            val firstKey = destinationCoordinatesCache.entries.firstOrNull()?.key ?: return
+        while (destinationCoordinatesCache.size > 50) {
+            val firstKey = destinationCoordinatesCache.keys.firstOrNull() ?: return
             destinationCoordinatesCache.remove(firstKey)
         }
     }

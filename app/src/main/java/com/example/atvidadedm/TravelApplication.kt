@@ -3,7 +3,6 @@ package com.example.atvidadedm
 import android.app.Application
 import com.example.atvidadedm.BuildConfig
 import com.example.atvidadedm.data.LocationRepository
-import com.example.atvidadedm.data.RouteRepository
 import com.example.atvidadedm.data.TripDestinationRepository
 import com.example.atvidadedm.data.TripPhotoRepository
 import com.example.atvidadedm.data.TripRepository
@@ -35,10 +34,6 @@ class TravelApplication : Application() {
 
     val locationRepository: LocationRepository by lazy {
         LocationRepository(applicationContext)
-    }
-
-    val routeRepository: RouteRepository by lazy {
-        RouteRepository()
     }
 
     val geminiRepository: GeminiRepository by lazy {
