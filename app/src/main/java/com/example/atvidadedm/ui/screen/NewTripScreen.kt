@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -117,123 +119,143 @@ fun NewTripScreen(
                 Text(
                     text = if (uiState.isEditMode) "Editar viagem" else "Nova viagem",
                     style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
 
-                OutlinedTextField(
-                    value = uiState.destination,
-                    onValueChange = viewModel::onDestinationChange,
-                    label = { Text("Destino inicial") },
-                    modifier = Modifier.fillMaxWidth(),
-                    isError = uiState.destinationError != null,
-                    supportingText = uiState.destinationError?.let {
-                        { Text(it, color = MaterialTheme.colorScheme.error) }
-                    },
-                    singleLine = true
-                )
-
-                OutlinedTextField(
-                    value = uiState.finalDestination,
-                    onValueChange = viewModel::onFinalDestinationChange,
-                    label = { Text("Destino final") },
-                    modifier = Modifier.fillMaxWidth(),
-                    isError = uiState.destinationError != null,
-                    supportingText = uiState.destinationError?.let {
-                        { Text(it, color = MaterialTheme.colorScheme.error) }
-                    },
-                    singleLine = true
-                )
-
-
-                Text(
-                    text = "Tipo da viagem",
-                    style = MaterialTheme.typography.titleMedium
-                )
-
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    FilterChip(
-                        selected = uiState.type == TripType.LAZER,
-                        onClick = { viewModel.onTypeChange(TripType.LAZER) },
-                        label = { Text("Lazer") }
-                    )
-                    FilterChip(
-                        selected = uiState.type == TripType.NEGOCIOS,
-                        onClick = { viewModel.onTypeChange(TripType.NEGOCIOS) },
-                        label = { Text("Negócios") }
-                    )
-                }
-
-                OutlinedTextField(
-                    value = uiState.startDate?.let { formatDate(it, formatter) } ?: "",
-                    onValueChange = {},
+                Card(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showStartDatePicker = true },
-                    readOnly = true,
-                    label = { Text("Data início") },
-                    placeholder = { Text("Selecione a data") },
-                    isError = uiState.startDateError != null,
-                    supportingText = uiState.startDateError?.let {
-                        { Text(it, color = MaterialTheme.colorScheme.error) }
-                    }
-                )
-
-                OutlinedTextField(
-                    value = uiState.endDate?.let { formatDate(it, formatter) } ?: "",
-                    onValueChange = {},
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showEndDatePicker = true },
-                    readOnly = true,
-                    label = { Text("Data fim") },
-                    placeholder = { Text("Selecione a data") },
-                    isError = uiState.endDateError != null,
-                    supportingText = uiState.endDateError?.let {
-                        { Text(it, color = MaterialTheme.colorScheme.error) }
-                    }
-                )
-
-                OutlinedTextField(
-                    value = uiState.budget,
-                    onValueChange = viewModel::onBudgetChange,
-                    label = { Text("Orçamento") },
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    isError = uiState.budgetError != null,
-                    supportingText = uiState.budgetError?.let {
-                        { Text(it, color = MaterialTheme.colorScheme.error) }
-                    },
-                    singleLine = true
-                )
-
-                OutlinedTextField(
-                    value = uiState.comments,
-                    onValueChange = viewModel::onCommentsChange,
-                    label = { Text("Comentários adicionais") },
-                    placeholder = { Text("Adicione detalhes sobre a viagem (opcional)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 2
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        .fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    ),
+                    elevation = CardDefaults.cardElevation(
+                        defaultElevation = 2.dp
+                    )
                 ) {
-                    TextButton(
-                        onClick = onBack,
-                        modifier = Modifier.weight(1f)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Text("Voltar")
-                    }
+                        OutlinedTextField(
+                            value = uiState.destination,
+                            onValueChange = viewModel::onDestinationChange,
+                            label = { Text("Destino inicial") },
+                            modifier = Modifier.fillMaxWidth(),
+                            isError = uiState.destinationError != null,
+                            supportingText = uiState.destinationError?.let {
+                                { Text(it, color = MaterialTheme.colorScheme.error) }
+                            },
+                            singleLine = true
+                        )
 
-                    Button(
-                        onClick = viewModel::saveTrip,
-                        modifier = Modifier.weight(1f),
-                        enabled = !uiState.isSaving
-                    ) {
-                        Text(if (uiState.isSaving) "Salvando..." else "Salvar")
+                        OutlinedTextField(
+                            value = uiState.finalDestination,
+                            onValueChange = viewModel::onFinalDestinationChange,
+                            label = { Text("Destino final") },
+                            modifier = Modifier.fillMaxWidth(),
+                            isError = uiState.destinationError != null,
+                            supportingText = uiState.destinationError?.let {
+                                { Text(it, color = MaterialTheme.colorScheme.error) }
+                            },
+                            singleLine = true
+                        )
+
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = "Tipo da viagem",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                FilterChip(
+                                    selected = uiState.type == TripType.LAZER,
+                                    onClick = { viewModel.onTypeChange(TripType.LAZER) },
+                                    label = { Text("Lazer") }
+                                )
+                                FilterChip(
+                                    selected = uiState.type == TripType.NEGOCIOS,
+                                    onClick = { viewModel.onTypeChange(TripType.NEGOCIOS) },
+                                    label = { Text("Negócios") }
+                                )
+                            }
+                        }
+
+                        OutlinedTextField(
+                            value = uiState.startDate?.let { formatDate(it, formatter) } ?: "",
+                            onValueChange = {},
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showStartDatePicker = true },
+                            readOnly = true,
+                            label = { Text("Data início") },
+                            placeholder = { Text("Selecione a data") },
+                            isError = uiState.startDateError != null,
+                            supportingText = uiState.startDateError?.let {
+                                { Text(it, color = MaterialTheme.colorScheme.error) }
+                            }
+                        )
+
+                        OutlinedTextField(
+                            value = uiState.endDate?.let { formatDate(it, formatter) } ?: "",
+                            onValueChange = {},
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showEndDatePicker = true },
+                            readOnly = true,
+                            label = { Text("Data fim") },
+                            placeholder = { Text("Selecione a data") },
+                            isError = uiState.endDateError != null,
+                            supportingText = uiState.endDateError?.let {
+                                { Text(it, color = MaterialTheme.colorScheme.error) }
+                            }
+                        )
+
+                        OutlinedTextField(
+                            value = uiState.budget,
+                            onValueChange = viewModel::onBudgetChange,
+                            label = { Text("Orçamento") },
+                            modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            isError = uiState.budgetError != null,
+                            supportingText = uiState.budgetError?.let {
+                                { Text(it, color = MaterialTheme.colorScheme.error) }
+                            },
+                            singleLine = true
+                        )
+
+                        OutlinedTextField(
+                            value = uiState.comments,
+                            onValueChange = viewModel::onCommentsChange,
+                            label = { Text("Comentários adicionais") },
+                            placeholder = { Text("Adicione detalhes sobre a viagem (opcional)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 2
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            TextButton(
+                                onClick = onBack,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Voltar")
+                            }
+
+                            Button(
+                                onClick = viewModel::saveTrip,
+                                modifier = Modifier.weight(1f),
+                                enabled = !uiState.isSaving
+                            ) {
+                                Text(if (uiState.isSaving) "Salvando..." else "Salvar")
+                            }
+                        }
                     }
                 }
             }

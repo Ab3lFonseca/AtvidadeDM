@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -252,7 +253,13 @@ fun HomeScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 4.dp)
+                        .padding(top = 4.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    elevation = CardDefaults.cardElevation(
+                        defaultElevation = 2.dp
+                    )
                 ) {
                     Column(
                         modifier = Modifier
@@ -303,7 +310,13 @@ private fun ItineraryPreviewCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 4.dp)
+            .padding(top = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 2.dp
+        )
     ) {
         Column(
             modifier = Modifier
@@ -346,7 +359,13 @@ private fun CurrentTripMapCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 4.dp)
+            .padding(top = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 2.dp
+        )
     ) {
         Column(
             modifier = Modifier
@@ -435,7 +454,13 @@ private fun ActiveTripCard(trip: TripEntity) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 4.dp)
+            .padding(top = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 2.dp
+        )
     ) {
         Column(
             modifier = Modifier

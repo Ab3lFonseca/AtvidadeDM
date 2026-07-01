@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.BeachAccess
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -229,7 +230,13 @@ private fun TripCard(
             .combinedClickable(
                 onClick = onOpenPhotos,
                 onLongClick = onEdit
-            )
+            ),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 3.dp
+        )
     ) {
         Row(
             modifier = Modifier

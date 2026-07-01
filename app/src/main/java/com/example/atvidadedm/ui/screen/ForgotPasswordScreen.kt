@@ -11,6 +11,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -77,6 +79,7 @@ fun ForgotPasswordScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = {
             SnackbarHost(hostState = snackbarHostState)
         },
@@ -114,32 +117,45 @@ fun ForgotPasswordScreen(
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // Campo de E-mail
-            OutlinedTextField(
-                value = uiState.email,
-                onValueChange = viewModel::onEmailChange,
-                label = { Text("E-mail") },
-                placeholder = { Text("exemplo@email.com") },
-                isError = uiState.emailError != null,
-                supportingText = uiState.emailError?.let {
-                    { Text(it, color = MaterialTheme.colorScheme.error) }
-                },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            Card(
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Botão de Envio – valida e retorna para Login
-            Button(
-                onClick = viewModel::submitRecovery,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !uiState.isSending
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
             ) {
-                Text(if (uiState.isSending) "Enviando..." else "Enviar")
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp)
+                ) {
+                    // Campo de E-mail
+                    OutlinedTextField(
+                        value = uiState.email,
+                        onValueChange = viewModel::onEmailChange,
+                        label = { Text("E-mail") },
+                        placeholder = { Text("exemplo@email.com") },
+                        isError = uiState.emailError != null,
+                        supportingText = uiState.emailError?.let {
+                            { Text(it, color = MaterialTheme.colorScheme.error) }
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Botão de Envio – valida e retorna para Login
+                    Button(
+                        onClick = viewModel::submitRecovery,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !uiState.isSending
+                    ) {
+                        Text(if (uiState.isSending) "Enviando..." else "Enviar")
+                    }
+                }
             }
         }
     }

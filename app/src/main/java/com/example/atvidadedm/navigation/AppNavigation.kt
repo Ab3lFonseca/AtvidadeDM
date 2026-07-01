@@ -12,8 +12,6 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.atvidadedm.ui.screen.ForgotPasswordScreen
 import com.example.atvidadedm.ui.screen.LoginScreen
-import com.example.atvidadedm.ui.screen.HomeScreen
-import com.example.atvidadedm.ui.screen.MyTripsScreen
 import com.example.atvidadedm.ui.screen.MenuScreen
 import com.example.atvidadedm.ui.screen.RoteiroScreen
 import com.example.atvidadedm.ui.screen.TripPhotosScreen

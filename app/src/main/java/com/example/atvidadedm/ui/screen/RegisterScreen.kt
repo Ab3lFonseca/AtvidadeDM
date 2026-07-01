@@ -15,6 +15,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -82,6 +84,7 @@ fun RegisterScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = {
             SnackbarHost(hostState = snackbarHostState)
         },
@@ -121,122 +124,135 @@ fun RegisterScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Campo: Nome
-            OutlinedTextField(
-                value = uiState.name,
-                onValueChange = activeViewModel::onNameChange,
-                label = { Text("Nome") },
-                placeholder = { Text("Seu nome completo") },
-                isError = uiState.nameError != null,
-                supportingText = uiState.nameError?.let {
-                    { Text(it, color = MaterialTheme.colorScheme.error) }
-                },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+            Card(
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Campo: E-mail
-            OutlinedTextField(
-                value = uiState.email,
-                onValueChange = activeViewModel::onEmailChange,
-                label = { Text("E-mail") },
-                placeholder = { Text("exemplo@email.com") },
-                isError = uiState.emailError != null,
-                supportingText = uiState.emailError?.let {
-                    { Text(it, color = MaterialTheme.colorScheme.error) }
-                },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Campo: Telefone
-            OutlinedTextField(
-                value = uiState.phone,
-                onValueChange = activeViewModel::onPhoneChange,
-                label = { Text("Telefone") },
-                placeholder = { Text("(00) 00000-0000") },
-                isError = uiState.phoneError != null,
-                supportingText = uiState.phoneError?.let {
-                    { Text(it, color = MaterialTheme.colorScheme.error) }
-                },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Campo: Senha
-            OutlinedTextField(
-                value = uiState.password,
-                onValueChange = activeViewModel::onPasswordChange,
-                label = { Text("Senha") },
-                visualTransformation = if (uiState.passwordVisible)
-                    VisualTransformation.None else PasswordVisualTransformation(),
-                isError = uiState.passwordError != null,
-                supportingText = uiState.passwordError?.let {
-                    { Text(it, color = MaterialTheme.colorScheme.error) }
-                },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                trailingIcon = {
-                    IconButton(onClick = activeViewModel::togglePasswordVisibility) {
-                        Icon(
-                            imageVector = if (uiState.passwordVisible)
-                                Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
-                            contentDescription = if (uiState.passwordVisible)
-                                "Ocultar senha" else "Mostrar senha"
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Campo: Confirmação de Senha
-            OutlinedTextField(
-                value = uiState.confirmPassword,
-                onValueChange = activeViewModel::onConfirmPasswordChange,
-                label = { Text("Confirmar Senha") },
-                visualTransformation = if (uiState.confirmPasswordVisible)
-                    VisualTransformation.None else PasswordVisualTransformation(),
-                isError = uiState.confirmPasswordError != null,
-                supportingText = uiState.confirmPasswordError?.let {
-                    { Text(it, color = MaterialTheme.colorScheme.error) }
-                },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                trailingIcon = {
-                    IconButton(onClick = activeViewModel::toggleConfirmPasswordVisibility) {
-                        Icon(
-                            imageVector = if (uiState.confirmPasswordVisible)
-                                Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
-                            contentDescription = if (uiState.confirmPasswordVisible)
-                                "Ocultar senha" else "Mostrar senha"
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Botão de Cadastro – valida e retorna para Login
-            Button(
-                onClick = {
-                    activeViewModel.registerUser()
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !uiState.isSaving
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
             ) {
-                Text(if (uiState.isSaving) "Cadastrando..." else "Cadastrar")
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp)
+                ) {
+                    // Campo: Nome
+                    OutlinedTextField(
+                        value = uiState.name,
+                        onValueChange = activeViewModel::onNameChange,
+                        label = { Text("Nome") },
+                        placeholder = { Text("Seu nome completo") },
+                        isError = uiState.nameError != null,
+                        supportingText = uiState.nameError?.let {
+                            { Text(it, color = MaterialTheme.colorScheme.error) }
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Campo: E-mail
+                    OutlinedTextField(
+                        value = uiState.email,
+                        onValueChange = activeViewModel::onEmailChange,
+                        label = { Text("E-mail") },
+                        placeholder = { Text("exemplo@email.com") },
+                        isError = uiState.emailError != null,
+                        supportingText = uiState.emailError?.let {
+                            { Text(it, color = MaterialTheme.colorScheme.error) }
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Campo: Telefone
+                    OutlinedTextField(
+                        value = uiState.phone,
+                        onValueChange = activeViewModel::onPhoneChange,
+                        label = { Text("Telefone") },
+                        placeholder = { Text("(00) 00000-0000") },
+                        isError = uiState.phoneError != null,
+                        supportingText = uiState.phoneError?.let {
+                            { Text(it, color = MaterialTheme.colorScheme.error) }
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Campo: Senha
+                    OutlinedTextField(
+                        value = uiState.password,
+                        onValueChange = activeViewModel::onPasswordChange,
+                        label = { Text("Senha") },
+                        visualTransformation = if (uiState.passwordVisible)
+                            VisualTransformation.None else PasswordVisualTransformation(),
+                        isError = uiState.passwordError != null,
+                        supportingText = uiState.passwordError?.let {
+                            { Text(it, color = MaterialTheme.colorScheme.error) }
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        trailingIcon = {
+                            IconButton(onClick = activeViewModel::togglePasswordVisibility) {
+                                Icon(
+                                    imageVector = if (uiState.passwordVisible)
+                                        Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
+                                    contentDescription = if (uiState.passwordVisible)
+                                        "Ocultar senha" else "Mostrar senha"
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Campo: Confirmação de Senha
+                    OutlinedTextField(
+                        value = uiState.confirmPassword,
+                        onValueChange = activeViewModel::onConfirmPasswordChange,
+                        label = { Text("Confirmar Senha") },
+                        visualTransformation = if (uiState.confirmPasswordVisible)
+                            VisualTransformation.None else PasswordVisualTransformation(),
+                        isError = uiState.confirmPasswordError != null,
+                        supportingText = uiState.confirmPasswordError?.let {
+                            { Text(it, color = MaterialTheme.colorScheme.error) }
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        trailingIcon = {
+                            IconButton(onClick = activeViewModel::toggleConfirmPasswordVisibility) {
+                                Icon(
+                                    imageVector = if (uiState.confirmPasswordVisible)
+                                        Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
+                                    contentDescription = if (uiState.confirmPasswordVisible)
+                                        "Ocultar senha" else "Mostrar senha"
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Botão de Cadastro – valida e retorna para Login
+                    Button(
+                        onClick = {
+                            activeViewModel.registerUser()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !uiState.isSaving
+                    ) {
+                        Text(if (uiState.isSaving) "Cadastrando..." else "Cadastrar")
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))

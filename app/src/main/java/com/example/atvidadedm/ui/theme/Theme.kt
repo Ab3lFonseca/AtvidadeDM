@@ -1,7 +1,7 @@
 package com.example.atvidadedm.ui.theme
 
-import android.app.Activity
 import android.os.Build
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -12,25 +12,32 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+    primary = Blue80,
+    secondary = BlueGrey80,
+    tertiary = Cyan80,
+    background = DarkBackground,
+    surface = DarkSurface,
+    surfaceVariant = DarkSurfaceVariant,
+    primaryContainer = BlueGrey40,
+    onPrimary = DarkBackground,
+    onSecondary = DarkBackground,
+    onTertiary = DarkBackground
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    primary = Blue40,
+    secondary = BlueGrey40,
+    tertiary = Cyan40,
+    background = LightBackground,
+    surface = LightSurface,
+    surfaceVariant = LightSurfaceVariant,
+    primaryContainer = Blue80,
+    onPrimary = LightSurface,
+    onSecondary = LightSurface,
+    onTertiary = LightSurface,
+    onBackground = Color(0xFF2A2F3A),
+    onSurface = Color(0xFF3A3F4A),
+    onSurfaceVariant = Color(0xFF6B7580)
 )
 
 @Composable
