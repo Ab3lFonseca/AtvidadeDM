@@ -11,9 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/**
- * Estado da tela de Login.
- */
+
 data class LoginUiState(
     val email: String = "",
     val password: String = "",
@@ -25,9 +23,7 @@ data class LoginUiState(
     val loggedUser: UserEntity? = null
 )
 
-/**
- * ViewModel responsável pela lógica da Tela de Login.
- */
+
 class LoginViewModel(
     private val userRepository: UserRepository
 ) : ViewModel() {

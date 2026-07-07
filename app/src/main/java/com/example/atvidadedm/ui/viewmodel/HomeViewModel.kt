@@ -4,18 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.atvidadedm.data.LocationLookupResult
 import com.example.atvidadedm.data.LocationRepository
-import com.example.atvidadedm.data.DestinationCoordinates
 import com.example.atvidadedm.data.TripDestinationRepository
 import com.example.atvidadedm.data.TripRepository
 import com.example.atvidadedm.data.local.TripEntity
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.supervisorScope
-import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
 import java.time.ZoneOffset
 
